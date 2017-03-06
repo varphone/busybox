@@ -173,10 +173,10 @@ enum {
 	OPT_c          = (1 << 10), // -c
 	OPT_x          = (1 << 11), // -x
 	OPT_p          = (1 << 12), // -p
-	OPT_OKNODO     = (1 << 13) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -o
-	OPT_VERBOSE    = (1 << 14) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -v
-	OPT_NICELEVEL  = (1 << 15) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -N
-	OPT_CHDIR      = (1 << 16), // -d
+	OPT_d          = (1 << 13), // -d
+	OPT_OKNODO     = (1 << 14) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -o
+	OPT_VERBOSE    = (1 << 15) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -v
+	OPT_NICELEVEL  = (1 << 16) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -N
 };
 #define QUIET (option_mask32 & OPT_QUIET)
 #define TEST  (option_mask32 & OPT_TEST)
@@ -543,7 +543,7 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 		/* User wants _us_ to make the pidfile */
 		write_pidfile(pidfile);
 	}
-	if (opt & OPT_CHDIR) {
+	if (opt & OPT_d) {
 		/* Change root */
 		chdir(chdir_root);
 	}
