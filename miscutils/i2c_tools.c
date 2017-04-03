@@ -37,16 +37,25 @@
 //config:	help
 //config:	  Detect I2C chips.
 //config:
+//config:config I2CLOAD
+//config:	bool "i2cload"
+//config:	default y
+//config:	select PLATFORM_LINUX
+//config:	help
+//config:	  Load data from args, file or pipe to I2C registers.
+//config:
 
 //applet:IF_I2CGET(APPLET(i2cget, BB_DIR_USR_SBIN, BB_SUID_DROP))
 //applet:IF_I2CSET(APPLET(i2cset, BB_DIR_USR_SBIN, BB_SUID_DROP))
 //applet:IF_I2CDUMP(APPLET(i2cdump, BB_DIR_USR_SBIN, BB_SUID_DROP))
 //applet:IF_I2CDETECT(APPLET(i2cdetect, BB_DIR_USR_SBIN, BB_SUID_DROP))
+//applet:IF_I2CLOAD(APPLET(i2cload, BB_DIR_USR_SBIN, BB_SUID_DROP))
 
 //kbuild:lib-$(CONFIG_I2CGET) += i2c_tools.o
 //kbuild:lib-$(CONFIG_I2CSET) += i2c_tools.o
 //kbuild:lib-$(CONFIG_I2CDUMP) += i2c_tools.o
 //kbuild:lib-$(CONFIG_I2CDETECT) += i2c_tools.o
+//kbuild:lib-$(CONFIG_I2CLOAD) += i2c_tools.o
 
 /*
  * Unsupported stuff:
@@ -104,7 +113,7 @@ static int32_t i2c_smbus_read_byte(int fd)
 	return data.byte;
 }
 
-#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP
+#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD
 static int32_t i2c_smbus_write_byte(int fd, uint8_t val)
 {
 	return i2c_smbus_access(fd, I2C_SMBUS_WRITE,
@@ -136,9 +145,9 @@ static int32_t i2c_smbus_read_word_data(int fd, uint8_t cmd)
 
 	return data.word;
 }
-#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP */
+#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD */
 
-#if ENABLE_I2CSET
+#if ENABLE_I2CSET || ENABLE_I2CLOAD
 static int32_t i2c_smbus_write_byte_data(int file,
 					 uint8_t cmd, uint8_t value)
 {
@@ -189,7 +198,7 @@ static int32_t i2c_smbus_write_i2c_block_data(int file, uint8_t cmd,
 	return i2c_smbus_access(file, I2C_SMBUS_WRITE, cmd,
 				I2C_SMBUS_I2C_BLOCK_BROKEN, &data);
 }
-#endif /* ENABLE_I2CSET */
+#endif /* ENABLE_I2CSET || ENABLE_I2CLOAD */
 
 #if ENABLE_I2CDUMP
 /*
@@ -245,7 +254,7 @@ static int i2c_bus_lookup(const char *bus_str)
 	return xstrtou_range(bus_str, 10, 0, 0xfffff);
 }
 
-#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP
+#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD
 static int i2c_parse_bus_addr(const char *addr_str)
 {
 	/* Slave address must be in range 0x00 - 0xff. */
@@ -265,15 +274,15 @@ static void i2c_set_slave_addr(int fd, int addr, int force)
 				itoptr(addr),
 				"can't set address to 0x%02x", addr);
 }
-#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP */
+#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD */
 
-#if ENABLE_I2CGET || ENABLE_I2CSET
+#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CLOAD
 static int i2c_parse_data_addr(const char *data_addr)
 {
 	/* Data address must be an 8 bit integer. */
 	return xstrtou_range(data_addr, 16, 0, 0xff);
 }
-#endif /* ENABLE_I2CGET || ENABLE_I2CSET */
+#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CLOAD */
 
 /*
  * Opens the device file associated with given i2c bus.
@@ -307,7 +316,7 @@ static void get_funcs_matrix(int fd, unsigned long *funcs)
 			"can't get adapter functionality matrix");
 }
 
-#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP
+#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD
 static void check_funcs_test_end(int funcs, int pec, const char *err)
 {
 	if (pec && !(funcs & (I2C_FUNC_SMBUS_PEC | I2C_FUNC_I2C)))
@@ -317,7 +326,7 @@ static void check_funcs_test_end(int funcs, int pec, const char *err)
 		bb_error_msg_and_die(
 			"adapter has no %s capability", err);
 }
-#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP */
+#endif /* ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD */
 
 /*
  * The below functions emit an error message and exit if the adapter doesn't
@@ -365,7 +374,7 @@ static void check_read_funcs(int fd, int mode, int data_addr, int pec)
 }
 #endif /* ENABLE_I2CGET || ENABLE_I2CDUMP */
 
-#if ENABLE_I2CSET
+#if ENABLE_I2CSET || ENABLE_I2CLOAD
 static void check_write_funcs(int fd, int mode, int pec)
 {
 	unsigned long funcs;
@@ -399,7 +408,7 @@ static void check_write_funcs(int fd, int mode, int pec)
 	}
 	check_funcs_test_end(funcs, pec, err);
 }
-#endif /* ENABLE_I2CSET */
+#endif /* ENABLE_I2CSET || ENABLE_I2CLOAD */
 
 static void confirm_or_abort(void)
 {
@@ -1341,3 +1350,242 @@ int i2cdetect_main(int argc UNUSED_PARAM, char **argv)
 	return 0;
 }
 #endif /* ENABLE_I2CDETECT */
+
+#if ENABLE_I2CLOAD
+//usage:#define i2cload_trivial_usage
+//usage:       "[-f] [-y] [-8] [-M MODE] [-c] [-v] BUS [FILE] [CHIP-ADDR DATA-ADDR [VALUE]] ..."
+//usage:#define i2cload_full_usage "\n\n"
+//usage:       "Load data from args, file or pipe to I2C registers\n"
+//usage:     "\n	I2CBUS	i2c bus number"
+//usage:     "\n	ADDRESS	0x00 - 0xff"
+//usage:     "\nMODE is:"
+//usage:     "\n	c	byte, no value"
+//usage:     "\n	b	byte data (default)"
+//usage:     "\n	w	word data"
+//usage:     "\n	i	I2C block data"
+//usage:     "\n	s	SMBus block data"
+//usage:     "\n	Append p for SMBus PEC"
+//usage:     "\n"
+//usage:     "\n	-f	force access"
+//usage:     "\n	-y	disable interactive mode"
+//usage:     "\n	-8	use 8 bit chip address"
+//usage:     "\n	-M MODE	data writing mode"
+//usage:     "\n	-c	ignore write error and continue"
+//usage:     "\n	-v      verbose output"
+
+int i2cload_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+int i2cload_main(int argc, char **argv)
+{
+	const unsigned opt_f = (1 << 0),
+			opt_y = (1 << 1),
+			opt_8 = (1 << 2),
+			opt_M = (1 << 3),
+			opt_c = (1 << 4),
+			opt_v = (1 << 5),
+			opt_stdin = (1 << 6),
+			opt_file = (1 << 7);
+	const char *const optstr = "fy8M:cv";
+
+	int bus_num, bus_addr, data_addr, mode = I2C_SMBUS_BYTE_DATA, pec = 0;
+	int i, loops = 0, val, blen = 0, fd, status;
+	unsigned char block[I2C_SMBUS_BLOCK_MAX];
+	char *opt_M_arg = NULL;
+	unsigned opts;
+	struct stat st;
+
+        opt_complementary = "-1"; /* from 1 to ? args */
+	opts = getopt32(argv, optstr, &opt_M_arg);
+	argv += optind;
+	argc -= optind;
+
+	if (opts & opt_M) {
+			switch (opt_M_arg[0]) {
+			case 'c': mode = I2C_SMBUS_BYTE;		break;
+			case 'b': /* Already set */			break;
+			case 'w': mode = I2C_SMBUS_WORD_DATA;		break;
+			case 's': mode = I2C_SMBUS_BLOCK_DATA;		break;
+			case 'i': mode = I2C_SMBUS_I2C_BLOCK_DATA;	break;
+			default:
+				bb_error_msg("invalid mode");
+				bb_show_usage();
+			}
+
+			pec = opt_M_arg[1] == 'p';
+			if (mode == I2C_SMBUS_BLOCK_DATA ||
+			    mode == I2C_SMBUS_I2C_BLOCK_DATA) {
+				if (pec && mode == I2C_SMBUS_I2C_BLOCK_DATA)
+					bb_error_msg_and_die(
+						"PEC not supported for I2C "
+						"block writes");
+				if (opts & opt_M)
+					bb_error_msg_and_die(
+						"mask not supported for block "
+						"writes");
+			}
+	}
+
+	bus_num = i2c_bus_lookup(argv[0]);
+	argc -= 1; argv += 1;
+
+	/* If no more args, read data from stdin */
+	if (argc == 0)
+		opts |= opt_stdin;
+	else if (argc > 0) {
+		/* The arg followed <bus_num> may be a file path */
+		if (stat(argv[0], &st) == 0) {
+			if (st.st_size > 4)
+				opts |= opt_file;
+		}
+	}
+
+	/* Open file as stdin */
+	if (opts & opt_file) {
+		fd = xopen(argv[0], O_RDONLY);
+		if (fd < 0)
+			bb_perror_msg_and_die("can't open '%s'", argv[0]);
+		xdup2(fd, STDIN_FILENO);
+		xclose(fd);
+		opts &= ~opt_file;
+		opts |= opt_stdin;
+	}
+
+	fd = i2c_dev_open(bus_num);
+	check_write_funcs(fd, mode, pec);
+
+	if (pec)
+		i2c_set_pec(fd, 1);
+
+load_next:
+	if (opts & opt_stdin) {
+		if (scanf("%x", &bus_addr) < 1)
+			goto done;
+		if (bus_addr < 0 || bus_addr > 0xff)
+			bb_error_msg_and_die("%d# <bus_addr> out of range (0x%x <> [0x00, 0xff])",
+					     loops, bus_addr);
+		if (scanf("%x", &data_addr) < 1)
+			bb_error_msg_and_die("%d# read <data_addr> failed", loops);
+		if (data_addr < 0 || data_addr > 0xff)
+			bb_error_msg_and_die("%d# <data_addr> out of range (0x%x <> [0x00, 0xff])",
+					     loops, data_addr);
+	} else {
+		if (argc < 1)
+			goto done;
+		bus_addr = i2c_parse_bus_addr(argv[0]);
+		if (argc < 2)
+			bb_error_msg_and_die("%d# missing <data_addr>", loops);
+		data_addr = i2c_parse_data_addr(argv[1]);
+		argc -= 2; argv += 2;
+	}
+
+	/* If use 8 bit chip address input, convert to 7 bit */
+	if (opts & opt_8)
+		bus_addr >>= 1;
+
+	/* Prepare the value(s) to be written according to current mode. */
+	switch (mode) {
+	case I2C_SMBUS_BYTE_DATA:
+		if (opts & opt_stdin) {
+			if (scanf("%x", &val) < 1)
+				bb_error_msg_and_die("%d# read <byte_data> failed", loops);
+		} else {
+			if (argc < 1)
+				bb_error_msg_and_die("%d# missing <byte_data>", loops);
+			val = xstrtou_range(argv[0], 0, 0, 0xff);
+			argc--; argv++;
+		}
+		if (opts & opt_v)
+			printf("%4d# 0x%2x 0x%2x 0x%2x\n", loops, bus_addr, data_addr, val);
+		break;
+	case I2C_SMBUS_WORD_DATA:
+		if (opts & opt_stdin) {
+			if (scanf("%x", &val) < 1)
+				bb_error_msg_and_die("[%d] read <word_data> failed", loops);
+		} else {
+			if (argc < 1)
+				bb_error_msg_and_die("[%d] missing <word_data>", loops);
+			val = xstrtou_range(argv[0], 0, 0, 0xffff);
+			argc--; argv++;
+		}
+		if (opts & opt_v)
+			printf("%4d# 0x%02x 0x%02x 0x%04x\n", loops, bus_addr, data_addr, val);
+		break;
+	case I2C_SMBUS_BLOCK_DATA:
+	case I2C_SMBUS_I2C_BLOCK_DATA:
+		if (opts & opt_stdin) {
+			if (scanf("%x", &val) < 1)
+				bb_error_msg_and_die("%d# read <block_count> failed", loops);
+			if (val > I2C_SMBUS_BLOCK_MAX)
+				bb_error_msg_and_die("%d# <block_count> too large (%d > %d)",
+						     loops, val, I2C_SMBUS_BLOCK_MAX);
+			blen = val;
+			block[0] = blen;
+			for (i = 1; i <= blen; i++) {
+				if (scanf("%x", &val) < 1)
+					bb_error_msg_and_die("#%d read <block_data[%d]> failed",
+							     loops, i);
+				block[i] = val;
+			}
+		} else {
+			if (argc < 1)
+				bb_error_msg_and_die("%d# missing <block_count>", loops);
+			blen = xstrtoul_range(argv[0], 0, 0, 0xff);
+			if (blen > I2C_SMBUS_BLOCK_MAX)
+				bb_error_msg_and_die("%d# <block_count> too large (%d > %d)",
+						     loops, blen, I2C_SMBUS_BLOCK_MAX);
+			argc--; argv++;
+			block[0] = blen;
+			for (i = 1; i <= blen; i++) {
+				if (argc < 1)
+					bb_error_msg_and_die("%d# missing <block_data[%d]>", loops, i);
+				block[i] = xstrtou_range(argv[0], 0, 0, 0xff);
+				argc--; argv++;
+			}
+		}
+		val = -1;
+		break;
+	default:
+		if (opts & opt_v)
+			printf("%4d# 0x%02x 0x%02x\n", loops, bus_addr, data_addr);
+		val = -1;
+		break;
+	}
+
+	i2c_set_slave_addr(fd, bus_addr, opts & opt_f);
+
+	if (!(opts & opt_y))
+		confirm_action(bus_addr, mode, data_addr, pec);
+
+	switch (mode) {
+	case I2C_SMBUS_BYTE:
+		status = i2c_smbus_write_byte(fd, data_addr);
+		break;
+	case I2C_SMBUS_WORD_DATA:
+		status = i2c_smbus_write_word_data(fd, data_addr, val);
+		break;
+	case I2C_SMBUS_BLOCK_DATA:
+		status = i2c_smbus_write_block_data(fd, data_addr,
+						    blen, block);
+		break;
+	case I2C_SMBUS_I2C_BLOCK_DATA:
+		status = i2c_smbus_write_i2c_block_data(fd, data_addr,
+							blen, block);
+		break;
+	default: /* I2C_SMBUS_BYTE_DATA */
+		status = i2c_smbus_write_byte_data(fd, data_addr, val);
+		break;
+	}
+	if (status < 0) {
+		if (opts & opt_c)
+			bb_perror_msg("%d# write failed", loops);
+		else
+			bb_perror_msg_and_die("%d# write failed", loops);
+	}
+
+	loops++; goto load_next;
+done:
+	if (pec)
+		i2c_set_pec(fd, 0); /* Clear PEC. */
+
+	return 0;
+}
+#endif /* ENABLE_I2CLOAD */
