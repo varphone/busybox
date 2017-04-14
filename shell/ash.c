@@ -3345,11 +3345,9 @@ unaliascmd(int argc UNUSED_PARAM, char **argv UNUSED_PARAM)
 {
 	int i;
 
-	while ((i = nextopt("a")) != '\0') {
-		if (i == 'a') {
-			rmaliases();
-			return 0;
-		}
+	while (nextopt("a") != '\0') {
+		rmaliases();
+		return 0;
 	}
 	for (i = 0; *argptr; argptr++) {
 		if (unalias(*argptr)) {
@@ -7744,9 +7742,8 @@ tryexec(IF_FEATURE_SH_STANDALONE(int applet_no,) char *cmd, char **argv, char **
  * have to change the find_command routine as well.
  * argv[-1] must exist and be writable! See tryexec() for why.
  */
-static void shellexec(char **, const char *, int) NORETURN;
-static void
-shellexec(char **argv, const char *path, int idx)
+static void shellexec(char *prog, char **argv, const char *path, int idx) NORETURN;
+static void shellexec(char *prog, char **argv, const char *path, int idx)
 {
 	char *cmdname;
 	int e;
@@ -7755,12 +7752,12 @@ shellexec(char **argv, const char *path, int idx)
 	int applet_no = -1; /* used only by FEATURE_SH_STANDALONE */
 
 	envp = listvars(VEXPORT, VUNSET, /*end:*/ NULL);
-	if (strchr(argv[0], '/') != NULL
+	if (strchr(prog, '/') != NULL
 #if ENABLE_FEATURE_SH_STANDALONE
-	 || (applet_no = find_applet_by_name(argv[0])) >= 0
+	 || (applet_no = find_applet_by_name(prog)) >= 0
 #endif
 	) {
-		tryexec(IF_FEATURE_SH_STANDALONE(applet_no,) argv[0], argv, envp);
+		tryexec(IF_FEATURE_SH_STANDALONE(applet_no,) prog, argv, envp);
 		if (applet_no >= 0) {
 			/* We tried execing ourself, but it didn't work.
 			 * Maybe /proc/self/exe doesn't exist?
@@ -7772,7 +7769,7 @@ shellexec(char **argv, const char *path, int idx)
 	} else {
  try_PATH:
 		e = ENOENT;
-		while ((cmdname = path_advance(&path, argv[0])) != NULL) {
+		while ((cmdname = path_advance(&path, prog)) != NULL) {
 			if (--idx < 0 && pathopt == NULL) {
 				tryexec(IF_FEATURE_SH_STANDALONE(-1,) cmdname, argv, envp);
 				if (errno != ENOENT && errno != ENOTDIR)
@@ -7796,8 +7793,8 @@ shellexec(char **argv, const char *path, int idx)
 	}
 	exitstatus = exerrno;
 	TRACE(("shellexec failed for %s, errno %d, suppress_int %d\n",
-		argv[0], e, suppress_int));
-	ash_msg_and_raise(EXEXIT, "%s: %s", argv[0], errmsg(e, "not found"));
+		prog, e, suppress_int));
+	ash_msg_and_raise(EXEXIT, "%s: %s", prog, errmsg(e, "not found"));
 	/* NOTREACHED */
 }
 
@@ -9355,7 +9352,14 @@ truecmd(int argc UNUSED_PARAM, char **argv UNUSED_PARAM)
 static int FAST_FUNC
 execcmd(int argc UNUSED_PARAM, char **argv)
 {
-	if (argv[1]) {
+	optionarg = NULL;
+	while (nextopt("a:") != '\0')
+		/* nextopt() sets optionarg to "-a ARGV0" */;
+
+	argv = argptr;
+	if (argv[0]) {
+		char *prog;
+
 		iflag = 0;              /* exit on error */
 		mflag = 0;
 		optschanged();
@@ -9371,7 +9375,10 @@ execcmd(int argc UNUSED_PARAM, char **argv)
 		/*setsignal(SIGTSTP); - unnecessary because of mflag=0 */
 		/*setsignal(SIGTTOU); - unnecessary because of mflag=0 */
 
-		shellexec(argv + 1, pathval(), 0);
+		prog = argv[0];
+		if (optionarg)
+			argv[0] = optionarg;
+		shellexec(prog, argv, pathval(), 0);
 		/* NOTREACHED */
 	}
 	return 0;
@@ -9773,7 +9780,7 @@ evalcommand(union node *cmd, int flags)
 			/* fall through to exec'ing external program */
 		}
 		listsetvar(varlist.list, VEXPORT|VSTACK);
-		shellexec(argv, path, cmdentry.u.index);
+		shellexec(argv[0], argv, path, cmdentry.u.index);
 		/* NOTREACHED */
 	} /* default */
 	case CMDBUILTIN:
