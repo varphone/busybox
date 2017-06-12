@@ -73,7 +73,9 @@ static const char udhcpc_longopts[] ALIGN1 =
 	"request-option\0" Required_argument "O"
 	"no-default-options\0" No_argument   "o"
 	"foreground\0"     No_argument       "f"
+	USE_FOR_MMU(
 	"background\0"     No_argument       "b"
+	)
 	"broadcast\0"      No_argument       "B"
 	IF_FEATURE_UDHCPC_ARPING("arping\0"	Optional_argument "a")
 	IF_FEATURE_UDHCP_PORT("client-port\0"	Required_argument "P")
@@ -1365,6 +1367,8 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 		/* now it looks similar to udhcpd's config file line:
 		 * "optname optval", using the common routine: */
 		udhcp_str2optset(optstr, &client_config.options);
+		if (colon)
+			*colon = ':'; /* restore it for NOMMU reexec */
 	}
 
 	if (udhcp_read_interface(client_config.interface,
@@ -1460,7 +1464,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 					already_waited_sec += (unsigned)monotonic_sec() - timestamp_before_wait;
 					continue;
 				}
-				/* Else: an error occured, panic! */
+				/* Else: an error occurred, panic! */
 				bb_perror_msg_and_die("select");
 			}
 		}
