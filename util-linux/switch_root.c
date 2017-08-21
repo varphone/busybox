@@ -6,24 +6,24 @@
  * Licensed under GPLv2, see file LICENSE in this source tree.
  */
 //config:config SWITCH_ROOT
-//config:	bool "switch_root"
+//config:	bool "switch_root (5.2 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  The switch_root utility is used from initramfs to select a new
-//config:	  root device. Under initramfs, you have to use this instead of
-//config:	  pivot_root. (Stop reading here if you don't care why.)
+//config:	The switch_root utility is used from initramfs to select a new
+//config:	root device. Under initramfs, you have to use this instead of
+//config:	pivot_root. (Stop reading here if you don't care why.)
 //config:
-//config:	  Booting with initramfs extracts a gzipped cpio archive into rootfs
-//config:	  (which is a variant of ramfs/tmpfs). Because rootfs can't be moved
-//config:	  or unmounted*, pivot_root will not work from initramfs. Instead,
-//config:	  switch_root deletes everything out of rootfs (including itself),
-//config:	  does a mount --move that overmounts rootfs with the new root, and
-//config:	  then execs the specified init program.
+//config:	Booting with initramfs extracts a gzipped cpio archive into rootfs
+//config:	(which is a variant of ramfs/tmpfs). Because rootfs can't be moved
+//config:	or unmounted*, pivot_root will not work from initramfs. Instead,
+//config:	switch_root deletes everything out of rootfs (including itself),
+//config:	does a mount --move that overmounts rootfs with the new root, and
+//config:	then execs the specified init program.
 //config:
-//config:	  * Because the Linux kernel uses rootfs internally as the starting
-//config:	  and ending point for searching through the kernel's doubly linked
-//config:	  list of active mount points. That's why.
+//config:	* Because the Linux kernel uses rootfs internally as the starting
+//config:	and ending point for searching through the kernel's doubly linked
+//config:	list of active mount points. That's why.
 
 //applet:IF_SWITCH_ROOT(APPLET(switch_root, BB_DIR_SBIN, BB_SUID_DROP))
 
@@ -97,9 +97,8 @@ int switch_root_main(int argc UNUSED_PARAM, char **argv)
 	struct statfs stfs;
 	dev_t rootdev;
 
-	// Parse args (-c console)
-	opt_complementary = "-2"; // minimum 2 params
-	getopt32(argv, "+c:", &console); // '+': stop at first non-option
+	// Parse args (-c console). '+': stop at first non-option
+	getopt32(argv, "^+" "c:" "\0" "-2" /* minimum 2 args */, &console);
 	argv += optind;
 	newroot = *argv++;
 

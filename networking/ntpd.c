@@ -41,27 +41,27 @@
  ***********************************************************************
  */
 //config:config NTPD
-//config:	bool "ntpd"
+//config:	bool "ntpd (17 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  The NTP client/server daemon.
+//config:	The NTP client/server daemon.
 //config:
 //config:config FEATURE_NTPD_SERVER
 //config:	bool "Make ntpd usable as a NTP server"
 //config:	default y
 //config:	depends on NTPD
 //config:	help
-//config:	  Make ntpd usable as a NTP server. If you disable this option
-//config:	  ntpd will be usable only as a NTP client.
+//config:	Make ntpd usable as a NTP server. If you disable this option
+//config:	ntpd will be usable only as a NTP client.
 //config:
 //config:config FEATURE_NTPD_CONF
 //config:	bool "Make ntpd understand /etc/ntp.conf"
 //config:	default y
 //config:	depends on NTPD
 //config:	help
-//config:	  Make ntpd look in /etc/ntp.conf for peers. Only "server address"
-//config:	  is supported.
+//config:	Make ntpd look in /etc/ntp.conf for peers. Only "server address"
+//config:	is supported.
 
 //applet:IF_NTPD(APPLET(ntpd, BB_DIR_USR_SBIN, BB_SUID_DROP))
 
@@ -2230,15 +2230,16 @@ static NOINLINE void ntp_init(char **argv)
 
 	/* Parse options */
 	peers = NULL;
-	opt_complementary = "dd:wn"  /* -d: counter; -p: list; -w implies -n */
-		IF_FEATURE_NTPD_SERVER(":Il"); /* -I implies -l */
-	opts = getopt32(argv,
+	opts = getopt32(argv, "^"
 			"nqNx" /* compat */
 			"wp:*S:"IF_FEATURE_NTPD_SERVER("l") /* NOT compat */
 			IF_FEATURE_NTPD_SERVER("I:") /* compat */
 			"d" /* compat */
 			"46aAbgL", /* compat, ignored */
-			&peers, &G.script_name,
+				"\0"
+				"dd:wn"  /* -d: counter; -p: list; -w implies -n */
+				IF_FEATURE_NTPD_SERVER(":Il") /* -I implies -l */
+			, &peers, &G.script_name,
 #if ENABLE_FEATURE_NTPD_SERVER
 			&G.if_name,
 #endif

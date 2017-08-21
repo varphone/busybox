@@ -22,32 +22,14 @@
  *
  * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
-/* TODO: security with -C DESTDIR option can be enhanced.
- * Consider tar file created via:
- * $ tar cvf bug.tar anything.txt
- * $ ln -s /tmp symlink
- * $ tar --append -f bug.tar symlink
- * $ rm symlink
- * $ mkdir symlink
- * $ tar --append -f bug.tar symlink/evil.py
- *
- * This will result in an archive which contains:
- * $ tar --list -f bug.tar
- * anything.txt
- * symlink
- * symlink/evil.py
- *
- * Untarring it puts evil.py in '/tmp' even if the -C DESTDIR is given.
- * This doesn't feel right, and IIRC GNU tar doesn't do that.
- */
 
 //config:config TAR
-//config:	bool "tar"
+//config:	bool "tar (40 kb)"
 //config:	default y
 //config:	help
-//config:	  tar is an archiving program. It's commonly used with gzip to
-//config:	  create compressed archives. It's probably the most widely used
-//config:	  UNIX archive program.
+//config:	tar is an archiving program. It's commonly used with gzip to
+//config:	create compressed archives. It's probably the most widely used
+//config:	UNIX archive program.
 //config:
 //config:config FEATURE_TAR_LONG_OPTIONS
 //config:	bool "Enable long options"
@@ -64,35 +46,35 @@
 //config:	default y
 //config:	depends on TAR && (FEATURE_SEAMLESS_Z || FEATURE_SEAMLESS_GZ || FEATURE_SEAMLESS_BZ2 || FEATURE_SEAMLESS_LZMA || FEATURE_SEAMLESS_XZ)
 //config:	help
-//config:	  With this option tar can automatically detect compressed
-//config:	  tarballs. Currently it works only on files (not pipes etc).
+//config:	With this option tar can automatically detect compressed
+//config:	tarballs. Currently it works only on files (not pipes etc).
 //config:
 //config:config FEATURE_TAR_FROM
 //config:	bool "Enable -X (exclude from) and -T (include from) options)"
 //config:	default y
 //config:	depends on TAR
 //config:	help
-//config:	  If you enable this option you'll be able to specify
-//config:	  a list of files to include or exclude from an archive.
+//config:	If you enable this option you'll be able to specify
+//config:	a list of files to include or exclude from an archive.
 //config:
 //config:config FEATURE_TAR_OLDGNU_COMPATIBILITY
 //config:	bool "Support old tar header format"
 //config:	default y
 //config:	depends on TAR || DPKG
 //config:	help
-//config:	  This option is required to unpack archives created in
-//config:	  the old GNU format; help to kill this old format by
-//config:	  repacking your ancient archives with the new format.
+//config:	This option is required to unpack archives created in
+//config:	the old GNU format; help to kill this old format by
+//config:	repacking your ancient archives with the new format.
 //config:
 //config:config FEATURE_TAR_OLDSUN_COMPATIBILITY
 //config:	bool "Enable untarring of tarballs with checksums produced by buggy Sun tar"
 //config:	default y
 //config:	depends on TAR || DPKG
 //config:	help
-//config:	  This option is required to unpack archives created by some old
-//config:	  version of Sun's tar (it was calculating checksum using signed
-//config:	  arithmetic). It is said to be fixed in newer Sun tar, but "old"
-//config:	  tarballs still exist.
+//config:	This option is required to unpack archives created by some old
+//config:	version of Sun's tar (it was calculating checksum using signed
+//config:	arithmetic). It is said to be fixed in newer Sun tar, but "old"
+//config:	tarballs still exist.
 //config:
 //config:config FEATURE_TAR_GNU_EXTENSIONS
 //config:	bool "Support GNU tar extensions (long filenames)"
@@ -104,18 +86,18 @@
 //config:	default y
 //config:	depends on TAR && FEATURE_TAR_LONG_OPTIONS
 //config:	help
-//config:	  If you enable this option you'll be able to instruct tar to send
-//config:	  the contents of each extracted file to the standard input of an
-//config:	  external program.
+//config:	If you enable this option you'll be able to instruct tar to send
+//config:	the contents of each extracted file to the standard input of an
+//config:	external program.
 //config:
 //config:config FEATURE_TAR_UNAME_GNAME
 //config:	bool "Enable use of user and group names"
 //config:	default y
 //config:	depends on TAR
 //config:	help
-//config:	  Enable use of user and group names in tar. This affects contents
-//config:	  listings (-t) and preserving permissions when unpacking (-p).
-//config:	  +200 bytes.
+//config:	Enable use of user and group names in tar. This affects contents
+//config:	listings (-t) and preserving permissions when unpacking (-p).
+//config:	+200 bytes.
 //config:
 //config:config FEATURE_TAR_NOPRESERVE_TIME
 //config:	bool "Enable -m (do not preserve time) GNU option"
@@ -127,8 +109,8 @@
 //config:	default n
 //config:	depends on TAR && SELINUX
 //config:	help
-//config:	  With this option busybox supports restoring SELinux labels
-//config:	  when extracting files from tar archives.
+//config:	With this option busybox supports restoring SELinux labels
+//config:	when extracting files from tar archives.
 
 //applet:IF_TAR(APPLET(tar, BB_DIR_BIN, BB_SUID_DROP))
 //kbuild:lib-$(CONFIG_TAR) += tar.o
@@ -941,6 +923,11 @@ static const char tar_longopts[] ALIGN1 =
 	"exclude\0"             Required_argument "\xff"
 # endif
 	;
+# define GETOPT32 getopt32long
+# define LONGOPTS ,tar_longopts
+#else
+# define GETOPT32 getopt32
+# define LONGOPTS
 #endif
 
 int tar_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
@@ -967,21 +954,8 @@ int tar_main(int argc UNUSED_PARAM, char **argv)
 		tar_handle->ah_flags |= ARCHIVE_DONT_RESTORE_PERM;
 
 	/* Prepend '-' to the first argument if required */
-	opt_complementary = "--:" // first arg is options
-		"tt:vv:" // count -t,-v
-#if ENABLE_FEATURE_TAR_LONG_OPTIONS && ENABLE_FEATURE_TAR_FROM
-		"\xff::" // --exclude=PATTERN is a list
-#endif
-		IF_FEATURE_TAR_CREATE("c:") "t:x:" // at least one of these is reqd
-		IF_FEATURE_TAR_CREATE("c--tx:t--cx:x--ct") // mutually exclusive
-		IF_NOT_FEATURE_TAR_CREATE("t--x:x--t") // mutually exclusive
-#if ENABLE_FEATURE_TAR_LONG_OPTIONS
-		":\xf9+" // --strip-components=NUM
-#endif
-	;
-#if ENABLE_FEATURE_TAR_LONG_OPTIONS
-	applet_long_options = tar_longopts;
-#endif
+	if (argv[1] && argv[1][0] != '-' && argv[1][0] != '\0')
+		argv[1] = xasprintf("-%s", argv[1]);
 #if ENABLE_DESKTOP
 	/* Lie to buildroot when it starts asking stupid questions. */
 	if (argv[1] && strcmp(argv[1], "--version") == 0) {
@@ -1018,7 +992,7 @@ int tar_main(int argc UNUSED_PARAM, char **argv)
 		}
 	}
 #endif
-	opt = getopt32(argv,
+	opt = GETOPT32(argv, "^"
 		"txC:f:Oopvk"
 		IF_FEATURE_TAR_CREATE(   "ch"    )
 		IF_FEATURE_SEAMLESS_BZ2( "j"     )
@@ -1029,6 +1003,18 @@ int tar_main(int argc UNUSED_PARAM, char **argv)
 		IF_FEATURE_SEAMLESS_Z(   "Z"     )
 		IF_FEATURE_TAR_NOPRESERVE_TIME("m")
 		IF_FEATURE_TAR_LONG_OPTIONS("\xf9:") // --strip-components
+		"\0"
+		"tt:vv:" // count -t,-v
+#if ENABLE_FEATURE_TAR_LONG_OPTIONS && ENABLE_FEATURE_TAR_FROM
+		"\xff::" // --exclude=PATTERN is a list
+#endif
+		IF_FEATURE_TAR_CREATE("c:") "t:x:" // at least one of these is reqd
+		IF_FEATURE_TAR_CREATE("c--tx:t--cx:x--ct") // mutually exclusive
+		IF_NOT_FEATURE_TAR_CREATE("t--x:x--t") // mutually exclusive
+#if ENABLE_FEATURE_TAR_LONG_OPTIONS
+		":\xf9+" // --strip-components=NUM
+#endif
+		LONGOPTS
 		, &base_dir // -C dir
 		, &tar_filename // -f filename
 		IF_FEATURE_TAR_FROM(, &(tar_handle->accept)) // T
@@ -1216,21 +1202,26 @@ int tar_main(int argc UNUSED_PARAM, char **argv)
 		USE_FOR_MMU(IF_DESKTOP(long long) int FAST_FUNC (*xformer)(transformer_state_t *xstate);)
 		USE_FOR_NOMMU(const char *xformer_prog;)
 
-		if (opt & OPT_COMPRESS)
-			USE_FOR_MMU(xformer = unpack_Z_stream;)
+		if (opt & OPT_COMPRESS) {
+			USE_FOR_MMU(IF_FEATURE_SEAMLESS_Z(xformer = unpack_Z_stream;))
 			USE_FOR_NOMMU(xformer_prog = "uncompress";)
-		if (opt & OPT_GZIP)
-			USE_FOR_MMU(xformer = unpack_gz_stream;)
+		}
+		if (opt & OPT_GZIP) {
+			USE_FOR_MMU(IF_FEATURE_SEAMLESS_GZ(xformer = unpack_gz_stream;))
 			USE_FOR_NOMMU(xformer_prog = "gunzip";)
-		if (opt & OPT_BZIP2)
-			USE_FOR_MMU(xformer = unpack_bz2_stream;)
+		}
+		if (opt & OPT_BZIP2) {
+			USE_FOR_MMU(IF_FEATURE_SEAMLESS_BZ2(xformer = unpack_bz2_stream;))
 			USE_FOR_NOMMU(xformer_prog = "bunzip2";)
-		if (opt & OPT_LZMA)
-			USE_FOR_MMU(xformer = unpack_lzma_stream;)
+		}
+		if (opt & OPT_LZMA) {
+			USE_FOR_MMU(IF_FEATURE_SEAMLESS_LZMA(xformer = unpack_lzma_stream;))
 			USE_FOR_NOMMU(xformer_prog = "unlzma";)
-		if (opt & OPT_XZ)
-			USE_FOR_MMU(xformer = unpack_xz_stream;)
+		}
+		if (opt & OPT_XZ) {
+			USE_FOR_MMU(IF_FEATURE_SEAMLESS_XZ(xformer = unpack_xz_stream;))
 			USE_FOR_NOMMU(xformer_prog = "unxz";)
+		}
 
 		fork_transformer_with_sig(tar_handle->src_fd, xformer, xformer_prog);
 		/* Can't lseek over pipes */

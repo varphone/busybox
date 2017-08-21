@@ -8,34 +8,34 @@
  * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
 //config:config KILL
-//config:	bool "kill"
+//config:	bool "kill (2.6 kb)"
 //config:	default y
 //config:	help
-//config:	  The command kill sends the specified signal to the specified
-//config:	  process or process group. If no signal is specified, the TERM
-//config:	  signal is sent.
+//config:	The command kill sends the specified signal to the specified
+//config:	process or process group. If no signal is specified, the TERM
+//config:	signal is sent.
 //config:
 //config:config KILLALL
-//config:	bool "killall"
+//config:	bool "killall (5.6 kb)"
 //config:	default y
 //config:	help
-//config:	  killall sends a signal to all processes running any of the
-//config:	  specified commands. If no signal name is specified, SIGTERM is
-//config:	  sent.
+//config:	killall sends a signal to all processes running any of the
+//config:	specified commands. If no signal name is specified, SIGTERM is
+//config:	sent.
 //config:
 //config:config KILLALL5
-//config:	bool "killall5"
+//config:	bool "killall5 (5.3 kb)"
 //config:	default y
 //config:	help
-//config:	  The SystemV killall command. killall5 sends a signal
-//config:	  to all processes except kernel threads and the processes
-//config:	  in its own session, so it won't kill the shell that is running
-//config:	  the script it was called from.
+//config:	The SystemV killall command. killall5 sends a signal
+//config:	to all processes except kernel threads and the processes
+//config:	in its own session, so it won't kill the shell that is running
+//config:	the script it was called from.
 
-//applet:IF_KILL(APPLET(kill, BB_DIR_BIN, BB_SUID_DROP))
-//                   APPLET_ODDNAME:name      main  location         suid_type     help
-//applet:IF_KILLALL( APPLET_ODDNAME(killall,  kill, BB_DIR_USR_BIN,  BB_SUID_DROP, killall))
-//applet:IF_KILLALL5(APPLET_ODDNAME(killall5, kill, BB_DIR_USR_SBIN, BB_SUID_DROP, killall5))
+//applet:IF_KILL(    APPLET_NOFORK(kill,     kill, BB_DIR_BIN,      BB_SUID_DROP, kill))
+//                   APPLET_NOFORK:name      main  location         suid_type     help
+//applet:IF_KILLALL( APPLET_NOFORK(killall,  kill, BB_DIR_USR_BIN,  BB_SUID_DROP, killall))
+//applet:IF_KILLALL5(APPLET_NOFORK(killall5, kill, BB_DIR_USR_SBIN, BB_SUID_DROP, killall5))
 
 //kbuild:lib-$(CONFIG_KILL) += kill.o
 //kbuild:lib-$(CONFIG_KILLALL) += kill.o
@@ -87,7 +87,7 @@
  * + we can't use xfunc here
  * + we can't use applet_name
  * + we can't use bb_show_usage
- * (Above doesn't apply for killall[5] cases)
+ * (doesn't apply for killall[5], still should be careful b/c NOFORK)
  *
  * kill %n gets translated into kill ' -<process group>' by shell (note space!)
  * This is needed to avoid collision with kill -9 ... syntax
@@ -188,7 +188,7 @@ int kill_main(int argc UNUSED_PARAM, char **argv)
 		arg = *++argv;
 	} /* else it must be -SIG */
 	signo = get_signum(arg);
-	if (signo < 0) { /* || signo > MAX_SIGNUM ? */
+	if (signo < 0) {
 		bb_error_msg("bad signal name '%s'", arg);
 		return EXIT_FAILURE;
 	}

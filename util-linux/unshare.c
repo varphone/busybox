@@ -7,14 +7,15 @@
  * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
 //config:config UNSHARE
-//config:	bool "unshare"
+//config:	bool "unshare (9.2 kb)"
 //config:	default y
-//config:	depends on LONG_OPTS && !NOMMU
+//config:	depends on !NOMMU
 //config:	select PLATFORM_LINUX
+//config:	select LONG_OPTS
 //config:	help
-//config:	  Run program with some namespaces unshared from parent.
+//config:	Run program with some namespaces unshared from parent.
 
-// depends on LONG_OPTS: it is awkward to exclude code which handles --propagation
+// needs LONG_OPTS: it is awkward to exclude code which handles --propagation
 // and --setgroups based on LONG_OPTS, so instead applet requires LONG_OPTS.
 // depends on !NOMMU: we need fork()
 
@@ -32,7 +33,7 @@
 //usage:     "\n	-p,--pid[=FILE]		Unshare PID namespace"
 //usage:     "\n	-U,--user[=FILE]	Unshare user namespace"
 //usage:     "\n	-f,--fork		Fork before execing PROG"
-//usage:     "\n	-r,--map-root-user	Map current user to root (implies -u)"
+//usage:     "\n	-r,--map-root-user	Map current user to root (implies -U)"
 //usage:     "\n	--mount-proc[=DIR]	Mount /proc filesystem first (implies -m)"
 //usage:     "\n	--propagation slave|shared|private|unchanged"
 //usage:     "\n				Modify mount propagation in mount namespace"
@@ -136,7 +137,7 @@ static const struct namespace_descr ns_list[] = {
  * we are forced to use "fake" letters for them.
  * '+': stop at first non-option.
  */
-static const char opt_str[] ALIGN1 = "+muinpU""fr""\xfd::""\xfe:""\xff:";
+#define OPT_STR "+muinpU""fr""\xfd::""\xfe:""\xff:"
 static const char unshare_longopts[] ALIGN1 =
 	"mount\0"		Optional_argument	"\xf0"
 	"uts\0"			Optional_argument	"\xf1"
@@ -209,7 +210,7 @@ int unshare_main(int argc UNUSED_PARAM, char **argv)
 	prop_str = PRIVATE_STR;
 	setgrp_str = NULL;
 
-	opt_complementary =
+	opts = getopt32long(argv, "^" OPT_STR "\0"
 		"\xf0""m" /* long opts (via their "fake chars") imply short opts */
 		":\xf1""u"
 		":\xf2""i"
@@ -218,16 +219,14 @@ int unshare_main(int argc UNUSED_PARAM, char **argv)
 		":\xf5""U"
 		":ru"	   /* --map-root-user or -r implies -u */
 		":\xfd""m" /* --mount-proc implies -m */
-	;
-	applet_long_options = unshare_longopts;
-	opts = getopt32(argv, opt_str,
-			&proc_mnt_target, &prop_str, &setgrp_str,
-			&ns_ctx_list[NS_MNT_POS].path,
-			&ns_ctx_list[NS_UTS_POS].path,
-			&ns_ctx_list[NS_IPC_POS].path,
-			&ns_ctx_list[NS_NET_POS].path,
-			&ns_ctx_list[NS_PID_POS].path,
-			&ns_ctx_list[NS_USR_POS].path
+		, unshare_longopts,
+		&proc_mnt_target, &prop_str, &setgrp_str,
+		&ns_ctx_list[NS_MNT_POS].path,
+		&ns_ctx_list[NS_UTS_POS].path,
+		&ns_ctx_list[NS_IPC_POS].path,
+		&ns_ctx_list[NS_NET_POS].path,
+		&ns_ctx_list[NS_PID_POS].path,
+		&ns_ctx_list[NS_USR_POS].path
 	);
 	argv += optind;
 	//bb_error_msg("opts:0x%x", opts);

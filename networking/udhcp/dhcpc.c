@@ -1001,14 +1001,14 @@ static int udhcp_raw_socket(int ifindex)
 	int fd;
 	struct sockaddr_ll sock;
 
-	log1("opening raw socket on ifindex %d", ifindex); //log2?
+	log2("opening raw socket on ifindex %d", ifindex);
 
 	fd = xsocket(PF_PACKET, SOCK_DGRAM, htons(ETH_P_IP));
 	/* ^^^^^
 	 * SOCK_DGRAM: remove link-layer headers on input (SOCK_RAW keeps them)
 	 * ETH_P_IP: want to receive only packets with IPv4 eth type
 	 */
-	log1("got raw socket fd"); //log2?
+	log2("got raw socket fd");
 
 	sock.sll_family = AF_PACKET;
 	sock.sll_protocol = htons(ETH_P_IP);
@@ -1295,16 +1295,18 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 	str_V = "udhcp "BB_VER;
 
 	/* Parse command line */
-	/* O,x: list; -T,-t,-A take numeric param */
-	IF_UDHCP_VERBOSE(opt_complementary = "vv";)
-	IF_LONG_OPTS(applet_long_options = udhcpc_longopts;)
-	opt = getopt32(argv, "CV:H:h:F:i:np:qRr:s:T:+t:+SA:+O:*ox:*fB"
+	opt = getopt32long(argv, "^"
+		/* O,x: list; -T,-t,-A take numeric param */
+		"CV:H:h:F:i:np:qRr:s:T:+t:+SA:+O:*ox:*fB"
 		USE_FOR_MMU("b")
 		IF_FEATURE_UDHCPC_ARPING("a::")
 		IF_FEATURE_UDHCP_PORT("P:")
 		"v"
+		"\0" IF_UDHCP_VERBOSE("vv") /* -v is a counter */
+		, udhcpc_longopts
 		, &str_V, &str_h, &str_h, &str_F
-		, &client_config.interface, &client_config.pidfile, &str_r /* i,p */
+		, &client_config.interface, &client_config.pidfile /* i,p */
+		, &str_r /* r */
 		, &client_config.script /* s */
 		, &discover_timeout, &discover_retries, &tryagain_timeout /* T,t,A */
 		, &list_O
@@ -1346,7 +1348,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 		char *optstr = llist_pop(&list_O);
 		unsigned n = bb_strtou(optstr, NULL, 0);
 		if (errno || n > 254) {
-			n = udhcp_option_idx(optstr);
+			n = udhcp_option_idx(optstr, dhcp_option_strings);
 			n = dhcp_optflags[n].code;
 		}
 		client_config.opt_mask[n >> 3] |= 1 << (n & 7);
@@ -1366,7 +1368,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 			*colon = ' ';
 		/* now it looks similar to udhcpd's config file line:
 		 * "optname optval", using the common routine: */
-		udhcp_str2optset(optstr, &client_config.options);
+		udhcp_str2optset(optstr, &client_config.options, dhcp_optflags, dhcp_option_strings);
 		if (colon)
 			*colon = ':'; /* restore it for NOMMU reexec */
 	}
@@ -1455,7 +1457,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 		retval = 0;
 		/* If we already timed out, fall through with retval = 0, else... */
 		if (tv > 0) {
-			log1("waiting on select %u seconds", tv);
+			log1("waiting %u seconds", tv);
 			timestamp_before_wait = (unsigned)monotonic_sec();
 			retval = poll(pfds, 2, tv < INT_MAX/1000 ? tv * 1000 : INT_MAX);
 			if (retval < 0) {
@@ -1465,7 +1467,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 					continue;
 				}
 				/* Else: an error occurred, panic! */
-				bb_perror_msg_and_die("select");
+				bb_perror_msg_and_die("poll");
 			}
 		}
 

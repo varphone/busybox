@@ -10,32 +10,32 @@
  */
 
 //config:config I2CGET
-//config:	bool "i2cget"
+//config:	bool "i2cget (5.6 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  Read from I2C/SMBus chip registers.
+//config:	Read from I2C/SMBus chip registers.
 //config:
 //config:config I2CSET
-//config:	bool "i2cset"
+//config:	bool "i2cset (6.9 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  Set I2C registers.
+//config:	Set I2C registers.
 //config:
 //config:config I2CDUMP
-//config:	bool "i2cdump"
+//config:	bool "i2cdump (7.2 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  Examine I2C registers.
+//config:	Examine I2C registers.
 //config:
 //config:config I2CDETECT
-//config:	bool "i2cdetect"
+//config:	bool "i2cdetect (7.2 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  Detect I2C chips.
+//config:	Detect I2C chips.
 //config:
 //config:config I2CLOAD
 //config:	bool "i2cload"
@@ -50,6 +50,7 @@
 //applet:IF_I2CDUMP(APPLET(i2cdump, BB_DIR_USR_SBIN, BB_SUID_DROP))
 //applet:IF_I2CDETECT(APPLET(i2cdetect, BB_DIR_USR_SBIN, BB_SUID_DROP))
 //applet:IF_I2CLOAD(APPLET(i2cload, BB_DIR_USR_SBIN, BB_SUID_DROP))
+/* not NOEXEC: if hw operation stalls, use less memory in "hung" process */
 
 //kbuild:lib-$(CONFIG_I2CGET) += i2c_tools.o
 //kbuild:lib-$(CONFIG_I2CSET) += i2c_tools.o
@@ -463,14 +464,12 @@ int i2cget_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
 int i2cget_main(int argc UNUSED_PARAM, char **argv)
 {
 	const unsigned opt_f = (1 << 0), opt_y = (1 << 1);
-	const char *const optstr = "fy";
 
 	int bus_num, bus_addr, data_addr = -1, status;
 	int mode = I2C_SMBUS_BYTE, pec = 0, fd;
 	unsigned opts;
 
-        opt_complementary = "-2:?4"; /* from 2 to 4 args */
-	opts = getopt32(argv, optstr);
+	opts = getopt32(argv, "^" "fy" "\0" "-2:?4"/*from 2 to 4 args*/);
 	argv += optind;
 
 	bus_num = i2c_bus_lookup(argv[0]);
@@ -552,7 +551,6 @@ int i2cset_main(int argc, char **argv)
 {
 	const unsigned opt_f = (1 << 0), opt_y = (1 << 1),
 			      opt_m = (1 << 2), opt_r = (1 << 3);
-	const char *const optstr = "fym:r";
 
 	int bus_num, bus_addr, data_addr, mode = I2C_SMBUS_BYTE, pec = 0;
 	int val, blen = 0, mask = 0, fd, status;
@@ -560,8 +558,7 @@ int i2cset_main(int argc, char **argv)
 	char *opt_m_arg = NULL;
 	unsigned opts;
 
-        opt_complementary = "-3"; /* from 3 to ? args */
-	opts = getopt32(argv, optstr, &opt_m_arg);
+	opts = getopt32(argv, "^" "fym:r" "\0" "-3"/*from 3 to ? args*/, &opt_m_arg);
 	argv += optind;
 	argc -= optind;
 
@@ -913,7 +910,6 @@ int i2cdump_main(int argc UNUSED_PARAM, char **argv)
 {
 	const unsigned opt_f = (1 << 0), opt_y = (1 << 1),
 			      opt_r = (1 << 2);
-	const char *const optstr = "fyr:";
 
 	int bus_num, bus_addr, mode = I2C_SMBUS_BYTE_DATA, even = 0, pec = 0;
 	unsigned first = 0x00, last = 0xff, opts;
@@ -921,8 +917,11 @@ int i2cdump_main(int argc UNUSED_PARAM, char **argv)
 	char *opt_r_str, *dash;
 	int fd, res;
 
-        opt_complementary = "-2:?3"; /* from 2 to 3 args */
-	opts = getopt32(argv, optstr, &opt_r_str);
+	opts = getopt32(argv, "^"
+		"fyr:"
+		"\0" "-2:?3" /* from 2 to 3 args */,
+		&opt_r_str
+	);
 	argv += optind;
 
 	bus_num = i2c_bus_lookup(argv[0]);
@@ -1216,15 +1215,16 @@ int i2cdetect_main(int argc UNUSED_PARAM, char **argv)
 	const unsigned opt_y = (1 << 0), opt_a = (1 << 1),
 			      opt_q = (1 << 2), opt_r = (1 << 3),
 			      opt_F = (1 << 4), opt_l = (1 << 5);
-	const char *const optstr = "yaqrFl";
 
 	int fd, bus_num, i, j, mode = I2CDETECT_MODE_AUTO, status, cmd;
 	unsigned first = 0x00, last = 0xff, opts;
 	unsigned long funcs;
 
-	opt_complementary = "q--r:r--q:" /* mutually exclusive */
-			"?3"; /* up to 3 args */
-	opts = getopt32(argv, optstr);
+	opts = getopt32(argv, "^"
+			"yaqrFl"
+			"\0"
+			"q--r:r--q:"/*mutually exclusive*/ "?3"/*up to 3 args*/
+	);
 	argv += optind;
 
 	if (opts & opt_l)

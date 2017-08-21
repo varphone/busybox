@@ -7,15 +7,15 @@
  * Licensed under GPLv2, see file LICENSE in this source tree.
  */
 //config:config FREE
-//config:	bool "free"
+//config:	bool "free (2.4 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX #sysinfo()
 //config:	help
-//config:	  free displays the total amount of free and used physical and swap
-//config:	  memory in the system, as well as the buffers used by the kernel.
-//config:	  The shared memory column should be ignored; it is obsolete.
+//config:	free displays the total amount of free and used physical and swap
+//config:	memory in the system, as well as the buffers used by the kernel.
+//config:	The shared memory column should be ignored; it is obsolete.
 
-//applet:IF_FREE(APPLET(free, BB_DIR_USR_BIN, BB_SUID_DROP))
+//applet:IF_FREE(APPLET_NOEXEC(free, free, BB_DIR_USR_BIN, BB_SUID_DROP, free))
 
 //kbuild:lib-$(CONFIG_FREE) += free.o
 
@@ -47,7 +47,10 @@ struct globals {
 #endif
 } FIX_ALIASING;
 #define G (*(struct globals*)bb_common_bufsiz1)
-#define INIT_G() do { setup_common_bufsiz(); } while (0)
+#define INIT_G() do { \
+	setup_common_bufsiz(); \
+	/* NB: noexec applet - globals not zeroed */ \
+} while (0)
 
 
 static unsigned long long scale(unsigned long d)

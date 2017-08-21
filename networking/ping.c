@@ -47,27 +47,28 @@
 #endif
 
 //config:config PING
-//config:	bool "ping"
+//config:	bool "ping (9.5 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  ping uses the ICMP protocol's mandatory ECHO_REQUEST datagram to
-//config:	  elicit an ICMP ECHO_RESPONSE from a host or gateway.
+//config:	ping uses the ICMP protocol's mandatory ECHO_REQUEST datagram to
+//config:	elicit an ICMP ECHO_RESPONSE from a host or gateway.
 //config:
 //config:config PING6
-//config:	bool "ping6"
+//config:	bool "ping6 (10 kb)"
 //config:	default y
 //config:	depends on FEATURE_IPV6
 //config:	help
-//config:	  This will give you a ping that can talk IPv6.
+//config:	Alias to "ping -6".
 //config:
 //config:config FEATURE_FANCY_PING
 //config:	bool "Enable fancy ping output"
 //config:	default y
 //config:	depends on PING || PING6
 //config:	help
-//config:	  Make the output from the ping applet include statistics, and at the
-//config:	  same time provide full support for ICMP packets.
+//config:	With this option off, ping will say "HOST is alive!"
+//config:	or terminate with SIGALRM in 5 seconds otherwise.
+//config:	No command-line options will be recognized.
 
 /* Needs socket(AF_INET, SOCK_RAW, IPPROTO_ICMP), therefore BB_SUID_MAYBE: */
 //applet:IF_PING(APPLET(ping, BB_DIR_BIN, BB_SUID_MAYBE))
@@ -103,7 +104,7 @@
 //usage:     "\n			(can exit earlier with -c CNT)"
 //usage:     "\n	-q		Quiet, only display output at start"
 //usage:     "\n			and when finished"
-//usage:     "\n	-p		Pattern to use for payload"
+//usage:     "\n	-p HEXBYTE	Pattern to use for payload"
 //usage:
 //usage:# define ping6_trivial_usage
 //usage:       "[OPTIONS] HOST"
@@ -114,7 +115,7 @@
 //usage:     "\n	-I IFACE/IP	Source interface or IP address"
 //usage:     "\n	-q		Quiet, only display output at start"
 //usage:     "\n			and when finished"
-//usage:     "\n	-p		Pattern to use for payload"
+//usage:     "\n	-p HEXBYTE	Pattern to use for payload"
 //usage:
 //usage:#endif
 //usage:
@@ -236,8 +237,6 @@ static void ping4(len_and_sockaddr *lsa)
 				break;
 		}
 	}
-	if (ENABLE_FEATURE_CLEAN_UP)
-		close(pingsock);
 }
 
 #if ENABLE_PING6
@@ -280,8 +279,6 @@ static void ping6(len_and_sockaddr *lsa)
 				break;
 		}
 	}
-	if (ENABLE_FEATURE_CLEAN_UP)
-		close(pingsock);
 }
 #endif
 
@@ -331,6 +328,8 @@ static int common_ping_main(sa_family_t af, char **argv)
 	else
 #endif
 		ping4(lsa);
+	if (ENABLE_FEATURE_CLEAN_UP)
+		close(pingsock);
 	printf("%s is alive!\n", G.hostname);
 	return EXIT_SUCCESS;
 }
@@ -341,7 +340,8 @@ static int common_ping_main(sa_family_t af, char **argv)
 
 /* Full(er) version */
 
-#define OPT_STRING ("qvc:+s:t:+w:+W:+I:np:4" IF_PING6("6"))
+/* -c NUM, -t NUM, -w NUM, -W NUM */
+#define OPT_STRING "qvc:+s:t:+w:+W:+I:np:4"IF_PING6("6")
 enum {
 	OPT_QUIET = 1 << 0,
 	OPT_VERBOSE = 1 << 1,
@@ -864,9 +864,12 @@ static int common_ping_main(int opt, char **argv)
 
 	INIT_G();
 
-	/* exactly one argument needed; -v and -q don't mix; -c NUM, -t NUM, -w NUM, -W NUM */
-	opt_complementary = "=1:q--v:v--q";
-	opt |= getopt32(argv, OPT_STRING, &pingcount, &str_s, &opt_ttl, &deadline, &timeout, &str_I, &str_p);
+	opt |= getopt32(argv, "^"
+			OPT_STRING
+			/* exactly one arg; -v and -q don't mix */
+			"\0" "=1:q--v:v--q",
+			&pingcount, &str_s, &opt_ttl, &deadline, &timeout, &str_I, &str_p
+	);
 	if (opt & OPT_s)
 		datalen = xatou16(str_s); // -s
 	if (opt & OPT_I) { // -I
@@ -954,7 +957,7 @@ int ping6_main(int argc UNUSED_PARAM, char **argv)
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ''AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE

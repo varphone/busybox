@@ -77,12 +77,12 @@
  */
 
 //config:config DIFF
-//config:	bool "diff"
+//config:	bool "diff (13 kb)"
 //config:	default y
 //config:	help
-//config:	  diff compares two files or directories and outputs the
-//config:	  differences between them in a form that can be given to
-//config:	  the patch command.
+//config:	diff compares two files or directories and outputs the
+//config:	differences between them in a form that can be given to
+//config:	the patch command.
 //config:
 //config:config FEATURE_DIFF_LONG_OPTIONS
 //config:	bool "Enable long options"
@@ -94,8 +94,8 @@
 //config:	default y
 //config:	depends on DIFF
 //config:	help
-//config:	  This option enables support for directory and subdirectory
-//config:	  comparison.
+//config:	This option enables support for directory and subdirectory
+//config:	comparison.
 
 //kbuild:lib-$(CONFIG_DIFF) += diff.o
 
@@ -967,6 +967,11 @@ static const char diff_longopts[] ALIGN1 =
 	"starting-file\0"            Required_argument "S"
 	"minimal\0"                  No_argument       "d"
 	;
+# define GETOPT32 getopt32long
+# define LONGOPTS ,diff_longopts
+#else
+# define GETOPT32 getopt32
+# define LONGOPTS
 #endif
 
 int diff_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
@@ -979,11 +984,8 @@ int diff_main(int argc UNUSED_PARAM, char **argv)
 	INIT_G();
 
 	/* exactly 2 params; collect multiple -L <label>; -U N */
-	opt_complementary = "=2";
-#if ENABLE_FEATURE_DIFF_LONG_OPTIONS
-	applet_long_options = diff_longopts;
-#endif
-	getopt32(argv, "abdiL:*NqrsS:tTU:+wupBE",
+	GETOPT32(argv, "^" "abdiL:*NqrsS:tTU:+wupBE" "\0" "=2"
+			LONGOPTS,
 			&L_arg, &s_start, &opt_U_context);
 	argv += optind;
 	while (L_arg)

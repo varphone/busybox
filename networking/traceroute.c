@@ -12,12 +12,12 @@
  * this paragraph in its entirety in the documentation or other materials
  * provided with the distribution, and (3) all advertising materials mentioning
  * features or use of this software display the following acknowledgement:
- * ``This product includes software developed by the University of California,
+ * ''This product includes software developed by the University of California,
  * Lawrence Berkeley Laboratory and its contributors.'' Neither the name of
  * the University nor the names of its contributors may be used to endorse
  * or promote products derived from this software without specific prior
  * written permission.
- * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR IMPLIED
+ * THIS SOFTWARE IS PROVIDED ''AS IS'' AND WITHOUT ANY EXPRESS OR IMPLIED
  * WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
@@ -210,26 +210,26 @@
  *     Tue Dec 20 03:50:13 PST 1988
  */
 //config:config TRACEROUTE
-//config:	bool "traceroute"
+//config:	bool "traceroute (11 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  Utility to trace the route of IP packets.
+//config:	Utility to trace the route of IP packets.
 //config:
 //config:config TRACEROUTE6
-//config:	bool "traceroute6"
+//config:	bool "traceroute6 (12 kb)"
 //config:	default y
 //config:	depends on FEATURE_IPV6
 //config:	help
-//config:	  Utility to trace the route of IPv6 packets.
+//config:	Utility to trace the route of IPv6 packets.
 //config:
 //config:config FEATURE_TRACEROUTE_VERBOSE
 //config:	bool "Enable verbose output"
 //config:	default y
 //config:	depends on TRACEROUTE || TRACEROUTE6
 //config:	help
-//config:	  Add some verbosity to traceroute. This includes among other things
-//config:	  hostnames and ICMP response types.
+//config:	Add some verbosity to traceroute. This includes among other things
+//config:	hostnames and ICMP response types.
 //config:
 //config:config FEATURE_TRACEROUTE_USE_ICMP
 //config:	bool "Enable -I option (use ICMP instead of UDP)"
@@ -833,9 +833,9 @@ common_traceroute_main(int op, char **argv)
 
 	INIT_G();
 
-	/* minimum 1 arg */
-	opt_complementary = "-1:x-x";
-	op |= getopt32(argv, OPT_STRING
+	op |= getopt32(argv, "^"
+		OPT_STRING
+		"\0" "-1:x-x" /* minimum 1 arg */
 		, &tos_str, &device, &max_ttl_str, &port_str, &nprobes_str
 		, &source, &waittime_str, &pausemsecs_str, &first_ttl_str
 	);

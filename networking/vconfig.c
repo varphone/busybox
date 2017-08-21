@@ -10,13 +10,13 @@
 /* BB_AUDIT SUSv3 N/A */
 
 //config:config VCONFIG
-//config:	bool "vconfig"
+//config:	bool "vconfig (2.5 kb)"
 //config:	default y
 //config:	select PLATFORM_LINUX
 //config:	help
-//config:	  Creates, removes, and configures VLAN interfaces
+//config:	Creates, removes, and configures VLAN interfaces
 
-//applet:IF_VCONFIG(APPLET(vconfig, BB_DIR_SBIN, BB_SUID_DROP))
+//applet:IF_VCONFIG(APPLET_NOEXEC(vconfig, vconfig, BB_DIR_SBIN, BB_SUID_DROP, vconfig))
 
 //kbuild:lib-$(CONFIG_VCONFIG) += vconfig.o
 

@@ -128,10 +128,9 @@ void FAST_FUNC data_extract_all(archive_handle_t *archive_handle)
 		res = link(hard_link, dst_name);
 		if (res != 0 && !(archive_handle->ah_flags & ARCHIVE_EXTRACT_QUIET)) {
 			/* shared message */
-			bb_perror_msg("can't create %slink "
-					"%s to %s", "hard",
-					dst_name,
-					hard_link);
+			bb_perror_msg("can't create %slink '%s' to '%s'",
+				"hard",	dst_name, hard_link
+			);
 		}
 		/* Hardlinks have no separate mode/ownership, skip chown/chmod */
 		goto ret;
@@ -178,15 +177,39 @@ void FAST_FUNC data_extract_all(archive_handle_t *archive_handle)
 	case S_IFLNK:
 		/* Symlink */
 //TODO: what if file_header->link_target == NULL (say, corrupted tarball?)
-		res = symlink(file_header->link_target, dst_name);
-		if (res != 0
-		 && !(archive_handle->ah_flags & ARCHIVE_EXTRACT_QUIET)
-		) {
-			/* shared message */
-			bb_perror_msg("can't create %slink "
-				"%s to %s", "sym",
-				dst_name,
-				file_header->link_target);
+
+		/* To avoid a directory traversal attack via symlinks,
+		 * do not restore symlinks with ".." components
+		 * or symlinks starting with "/", unless a magic
+		 * envvar is set.
+		 *
+		 * For example, consider a .tar created via:
+		 *  $ tar cvf bug.tar anything.txt
+		 *  $ ln -s /tmp symlink
+		 *  $ tar --append -f bug.tar symlink
+		 *  $ rm symlink
+		 *  $ mkdir symlink
+		 *  $ tar --append -f bug.tar symlink/evil.py
+		 *
+		 * This will result in an archive that contains:
+		 *  $ tar --list -f bug.tar
+		 *  anything.txt
+		 *  symlink [-> /tmp]
+		 *  symlink/evil.py
+		 *
+		 * Untarring bug.tar would otherwise place evil.py in '/tmp'.
+		 */
+		if (!unsafe_symlink_target(file_header->link_target)) {
+			res = symlink(file_header->link_target, dst_name);
+			if (res != 0
+			 && !(archive_handle->ah_flags & ARCHIVE_EXTRACT_QUIET)
+			) {
+				/* shared message */
+				bb_perror_msg("can't create %slink '%s' to '%s'",
+					"sym",
+					dst_name, file_header->link_target
+				);
+			}
 		}
 		break;
 	case S_IFSOCK:

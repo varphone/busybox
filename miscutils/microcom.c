@@ -8,10 +8,10 @@
  * Licensed under GPLv2, see file LICENSE in this source tree.
  */
 //config:config MICROCOM
-//config:	bool "microcom"
+//config:	bool "microcom (5.6 kb)"
 //config:	default y
 //config:	help
-//config:	  The poor man's minicom utility for chatting with serial port devices.
+//config:	The poor man's minicom utility for chatting with serial port devices.
 
 //applet:IF_MICROCOM(APPLET(microcom, BB_DIR_USR_BIN, BB_SUID_DROP))
 
@@ -74,7 +74,9 @@ int microcom_main(int argc UNUSED_PARAM, char **argv)
 	unsigned opts;
 
 	// fetch options
-	opts = getopt32(argv, "Xs:+d:+t:+", &speed, &delay, &timeout);
+	opts = getopt32(argv, "^" "Xs:+d:+t:+" "\0" "=1",
+				&speed, &delay, &timeout
+	);
 //	argc -= optind;
 	argv += optind;
 

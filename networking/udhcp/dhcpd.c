@@ -361,6 +361,10 @@ static int FAST_FUNC read_staticlease(const char *const_line, void *arg)
 	return 1;
 }
 
+static int FAST_FUNC read_optset(const char *line, void *arg) {
+	return udhcp_str2optset(line, arg, dhcp_optflags, dhcp_option_strings);
+}
+
 struct config_keyword {
 	const char *keyword;
 	int (*handler)(const char *line, void *var) FAST_FUNC;
@@ -387,8 +391,8 @@ static const struct config_keyword keywords[] = {
 	{"pidfile"      , read_str        , OFS(pidfile      ), "/var/run/udhcpd.pid"},
 	{"siaddr"       , udhcp_str2nip   , OFS(siaddr_nip   ), "0.0.0.0"},
 	/* keywords with no defaults must be last! */
-	{"option"       , udhcp_str2optset, OFS(options      ), ""},
-	{"opt"          , udhcp_str2optset, OFS(options      ), ""},
+	{"option"       , read_optset     , OFS(options      ), ""},
+	{"opt"          , read_optset     , OFS(options      ), ""},
 	{"notify_file"  , read_str        , OFS(notify_file  ), NULL},
 	{"sname"        , read_str        , OFS(sname        ), NULL},
 	{"boot_file"    , read_str        , OFS(boot_file    ), NULL},
@@ -810,11 +814,12 @@ int udhcpd_main(int argc UNUSED_PARAM, char **argv)
 	IF_FEATURE_UDHCP_PORT(SERVER_PORT = 67;)
 	IF_FEATURE_UDHCP_PORT(CLIENT_PORT = 68;)
 
+	opt = getopt32(argv, "^"
+		"fSI:va:"IF_FEATURE_UDHCP_PORT("P:")
+		"\0"
 #if defined CONFIG_UDHCP_DEBUG && CONFIG_UDHCP_DEBUG >= 1
-	opt_complementary = "vv";
+		"vv"
 #endif
-	opt = getopt32(argv, "fSI:va:"
-		IF_FEATURE_UDHCP_PORT("P:")
 		, &str_I
 		, &str_a
 		IF_FEATURE_UDHCP_PORT(, &str_P)

@@ -9,14 +9,13 @@
  *
  * Licensed under GPLv2, see file LICENSE in this source tree.
  */
-
 //config:config PSTREE
-//config:	bool "pstree"
+//config:	bool "pstree (9.4 kb)"
 //config:	default y
 //config:	help
-//config:	  Display a tree of processes.
+//config:	Display a tree of processes.
 
-//applet:IF_PSTREE(APPLET(pstree, BB_DIR_USR_BIN, BB_SUID_DROP))
+//applet:IF_PSTREE(APPLET_NOEXEC(pstree, pstree, BB_DIR_USR_BIN, BB_SUID_DROP, pstree))
 
 //kbuild:lib-$(CONFIG_PSTREE) += pstree.o
 
@@ -34,7 +33,7 @@
 
 struct child;
 
-#ifdef ENABLE_FEATURE_SHOW_THREADS
+#if ENABLE_FEATURE_SHOW_THREADS
 /* For threads, we add {...} around the comm, so we need two extra bytes */
 # define COMM_DISP_LEN (COMM_LEN + 2)
 #else
@@ -387,8 +386,7 @@ int pstree_main(int argc UNUSED_PARAM, char **argv)
 
 	G.output_width = get_terminal_width(0);
 
-	opt_complementary = "?1";
-	getopt32(argv, "p");
+	getopt32(argv, "^" "p" "\0" "?1");
 	argv += optind;
 
 	if (argv[0]) {

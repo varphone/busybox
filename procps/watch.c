@@ -12,11 +12,11 @@
 /* BB_AUDIT GNU defects -- only option -n is supported. */
 
 //config:config WATCH
-//config:	bool "watch"
+//config:	bool "watch (4.1 kb)"
 //config:	default y
 //config:	help
-//config:	  watch is used to execute a program periodically, showing
-//config:	  output to the screen.
+//config:	watch is used to execute a program periodically, showing
+//config:	output to the screen.
 
 //applet:IF_WATCH(APPLET(watch, BB_DIR_BIN, BB_SUID_DROP))
 
@@ -62,9 +62,9 @@ int watch_main(int argc UNUSED_PARAM, char **argv)
 	xopen("/dev/null", O_RDONLY);
 #endif
 
-	opt_complementary = "-1"; // at least one param; -n NUM
-	// "+": stop at first non-option (procps 3.x only)
-	opt = getopt32(argv, "+dtn:+", &period);
+	// "+": stop at first non-option (procps 3.x only); -n NUM
+	// at least one param
+	opt = getopt32(argv, "^+" "dtn:+" "\0" "-1", &period);
 	argv += optind;
 
 	// watch from both procps 2.x and 3.x does concatenation. Example:
