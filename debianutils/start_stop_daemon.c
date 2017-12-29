@@ -45,6 +45,7 @@ Options which are valid for --start only:
         -c,--chuid USER[:[GRP]] Change to specified user [and group]
         -m,--make-pidfile       Write PID to the pidfile
                                 (both -m and -p must be given!)
+        -d,--chdir DIR          Change to <DIR> (default is /)
 
 Options which are valid for --stop only:
         -s,--signal SIG         Signal to send (default:TERM)
@@ -106,6 +107,7 @@ Misc options:
 //usage:	)
 //usage:     "\n	-c USER[:[GRP]]	Change user/group"
 //usage:     "\n	-m		Write PID to pidfile specified by -p"
+//usage:     "\n	-d,--chdir DIR          Change to <DIR> (default is /)"
 //usage:     "\n-K only:"
 //usage:     "\n	-s SIG		Signal to send"
 //usage:     "\n	-t		Match only, exit with 0 if found"
@@ -140,9 +142,10 @@ enum {
 	OPT_c          = (1 << 10), // -c
 	OPT_x          = (1 << 11), // -x
 	OPT_p          = (1 << 12), // -p
-	OPT_OKNODO     = (1 << 13) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -o
-	OPT_VERBOSE    = (1 << 14) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -v
-	OPT_NICELEVEL  = (1 << 15) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -N
+	OPT_d          = (1 << 13), // -d
+	OPT_OKNODO     = (1 << 14) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -o
+	OPT_VERBOSE    = (1 << 15) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -v
+	OPT_NICELEVEL  = (1 << 16) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -N
 };
 #define QUIET (option_mask32 & OPT_QUIET)
 #define TEST  (option_mask32 & OPT_TEST)
@@ -160,6 +163,7 @@ struct globals {
 #ifdef OLDER_VERSION_OF_X
 	struct stat execstat;
 #endif
+	char *chdir_root;
 } FIX_ALIASING;
 #define G (*(struct globals*)bb_common_bufsiz1)
 #define userspec          (G.userspec            )
@@ -168,6 +172,7 @@ struct globals {
 #define pidfile           (G.pidfile             )
 #define user_id           (G.user_id             )
 #define signal_nr         (G.signal_nr           )
+#define chdir_root        (G.chdir_root          )
 #define INIT_G() do { \
 	setup_common_bufsiz(); \
 	user_id = -1; \
@@ -395,6 +400,7 @@ static const char start_stop_daemon_longopts[] ALIGN1 =
 	"pidfile\0"      Required_argument "p"
 # if ENABLE_FEATURE_START_STOP_DAEMON_FANCY
 	"retry\0"        Required_argument "R"
+	"chdir\0"        Required_argument "d"
 # endif
 	;
 # define GETOPT32 getopt32long
@@ -420,7 +426,7 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 	INIT_G();
 
 	opt = GETOPT32(argv, "^"
-		"KSbqtma:n:s:u:c:x:p:"
+		"KSbqtma:n:s:u:c:x:p:d:"
 		IF_FEATURE_START_STOP_DAEMON_FANCY("ovN:R:")
 			/* -K or -S is required; they are mutually exclusive */
 			/* -p is required if -m is given */
@@ -431,7 +437,7 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 			"K:S:K--S:S--K:m?p:K?xpun:S?xa"
 			IF_FEATURE_START_STOP_DAEMON_FANCY("q-v"),
 		LONGOPTS
-		&startas, &cmdname, &signame, &userspec, &chuid, &execname, &pidfile
+		&startas, &cmdname, &signame, &userspec, &chuid, &execname, &pidfile, &chdir_root
 		IF_FEATURE_START_STOP_DAEMON_FANCY(,&opt_N)
 		/* We accept and ignore -R <param> / --retry <param> */
 		IF_FEATURE_START_STOP_DAEMON_FANCY(,NULL)
@@ -510,6 +516,10 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 	if (opt & OPT_MAKEPID) {
 		/* User wants _us_ to make the pidfile */
 		write_pidfile(pidfile);
+	}
+	if (opt & OPT_d) {
+		/* Change root */
+		chdir(chdir_root);
 	}
 	if (opt & OPT_c) {
 		struct bb_uidgid_t ugid;
