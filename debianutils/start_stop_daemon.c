@@ -77,6 +77,7 @@ Misc options:
 //config:	-o|--oknodo ignored since we exit with 0 anyway
 //config:	-v|--verbose
 //config:	-N|--nicelevel N
+//config:	-d|--chdir DIR
 
 //applet:IF_START_STOP_DAEMON(APPLET_ODDNAME(start-stop-daemon, start_stop_daemon, BB_DIR_SBIN, BB_SUID_DROP, start_stop_daemon))
 /* not NOEXEC: uses bb_common_bufsiz1 */
@@ -103,6 +104,7 @@ Misc options:
 //usage:     "\n	-b		Background"
 //usage:	IF_FEATURE_START_STOP_DAEMON_FANCY(
 //usage:     "\n	-N N		Change nice level"
+//usage:     "\n	-d DIR		Change working directory"
 //usage:	)
 //usage:     "\n	-c USER[:[GRP]]	Change user/group"
 //usage:     "\n	-m		Write PID to pidfile specified by -p"
@@ -145,6 +147,7 @@ enum {
 	OPT_OKNODO     = (1 << 13) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -o
 	OPT_VERBOSE    = (1 << 14) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -v
 	OPT_NICELEVEL  = (1 << 15) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -N
+	OPT_CHDIR      = (1 << 16) * ENABLE_FEATURE_START_STOP_DAEMON_FANCY, // -d
 };
 #define QUIET (option_mask32 & OPT_QUIET)
 #define TEST  (option_mask32 & OPT_TEST)
@@ -384,6 +387,7 @@ static const char start_stop_daemon_longopts[] ALIGN1 =
 	"oknodo\0"       No_argument       "o"
 	"verbose\0"      No_argument       "v"
 	"nicelevel\0"    Required_argument "N"
+	"chdir\0"        Required_argument "d"
 # endif
 	"startas\0"      Required_argument "a"
 	"name\0"         Required_argument "n"
@@ -417,13 +421,14 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 //	char *retry_arg = NULL;
 //	int retries = -1;
 	char *opt_N;
+	char *opt_d;
 #endif
 
 	INIT_G();
 
 	opt = GETOPT32(argv, "^"
 		"KSbqtma:n:s:u:c:x:p:"
-		IF_FEATURE_START_STOP_DAEMON_FANCY("ovN:R:")
+		IF_FEATURE_START_STOP_DAEMON_FANCY("ovN:d:R:")
 			/* -K or -S is required; they are mutually exclusive */
 			/* -p is required if -m is given */
 			/* -xpun (at least one) is required if -K is given */
@@ -434,7 +439,7 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 			IF_FEATURE_START_STOP_DAEMON_FANCY("q-v"),
 		LONGOPTS
 		&startas, &cmdname, &signame, &userspec, &chuid, &execname, &pidfile
-		IF_FEATURE_START_STOP_DAEMON_FANCY(,&opt_N)
+		IF_FEATURE_START_STOP_DAEMON_FANCY(,&opt_N,&opt_d)
 		/* We accept and ignore -R <param> / --retry <param> */
 		IF_FEATURE_START_STOP_DAEMON_FANCY(,NULL)
 	);
@@ -513,6 +518,12 @@ int start_stop_daemon_main(int argc UNUSED_PARAM, char **argv)
 		/* User wants _us_ to make the pidfile */
 		write_pidfile(pidfile);
 	}
+#if ENABLE_FEATURE_START_STOP_DAEMON_FANCY
+	if (opt & OPT_CHDIR) {
+		/* Change working directory */
+		chdir(opt_d);
+	}
+#endif
 	if (opt & OPT_c) {
 		struct bb_uidgid_t ugid;
 		parse_chown_usergroup_or_die(&ugid, chuid);
