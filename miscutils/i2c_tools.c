@@ -257,8 +257,8 @@ static int i2c_bus_lookup(const char *bus_str)
 #if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CLOAD
 static int i2c_parse_bus_addr(const char *addr_str)
 {
-	/* Slave address must be in range 0x03 - 0x77. */
-	return xstrtou_range(addr_str, 16, 0x03, 0x77);
+	/* Slave address must be in range 0x00 - 0xff. */
+	return xstrtou_range(addr_str, 16, 0x00, 0xff);
 }
 
 static void i2c_set_pec(int fd, int pec)
@@ -450,7 +450,7 @@ static void confirm_action(int bus_addr, int mode, int data_addr, int pec)
 //usage:#define i2cget_full_usage "\n\n"
 //usage:       "Read from I2C/SMBus chip registers\n"
 //usage:     "\n	I2CBUS	i2c bus number"
-//usage:     "\n	ADDRESS	0x03 - 0x77"
+//usage:     "\n	ADDRESS	0x00 - 0xff"
 //usage:     "\nMODE is:"
 //usage:     "\n	b	read byte data (default)"
 //usage:     "\n	w	read word data"
@@ -534,7 +534,7 @@ int i2cget_main(int argc UNUSED_PARAM, char **argv)
 //usage:#define i2cset_full_usage "\n\n"
 //usage:       "Set I2C registers\n"
 //usage:     "\n	I2CBUS	i2c bus number"
-//usage:     "\n	ADDRESS	0x03 - 0x77"
+//usage:     "\n	ADDRESS	0x00 - 0xff"
 //usage:     "\nMODE is:"
 //usage:     "\n	c	byte, no value"
 //usage:     "\n	b	byte data (default)"
@@ -895,7 +895,7 @@ static void dump_word_data(int bus_fd, unsigned first, unsigned last)
 //usage:#define i2cdump_full_usage "\n\n"
 //usage:       "Examine I2C registers\n"
 //usage:     "\n	I2CBUS	i2c bus number"
-//usage:     "\n	ADDRESS	0x03 - 0x77"
+//usage:     "\n	ADDRESS	0x00 - 0xff"
 //usage:     "\nMODE is:"
 //usage:     "\n	b	byte (default)"
 //usage:     "\n	w	word"
@@ -1255,7 +1255,7 @@ int i2cdetect_main(int argc UNUSED_PARAM, char **argv)
 
 	if (opts & opt_a) {
 		first = 0x00;
-		last = 0x7f;
+		last = 0xff;
 	}
 
 	/* Read address range. */
