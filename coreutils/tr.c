@@ -13,11 +13,53 @@
  * This version of tr is adapted from Minix tr and was modified
  * by Erik Andersen <andersen@codepoet.org> to be used in busybox.
  *
- * Licensed under GPLv2 or later, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
 /* http://www.opengroup.org/onlinepubs/009695399/utilities/tr.html
  * TODO: graph, print
  */
+//config:config TR
+//config:	bool "tr"
+//config:	default y
+//config:	help
+//config:	  tr is used to squeeze, and/or delete characters from standard
+//config:	  input, writing to standard output.
+//config:
+//config:config FEATURE_TR_CLASSES
+//config:	bool "Enable character classes (such as [:upper:])"
+//config:	default y
+//config:	depends on TR
+//config:	help
+//config:	  Enable character classes, enabling commands such as:
+//config:	  tr [:upper:] [:lower:] to convert input into lowercase.
+//config:
+//config:config FEATURE_TR_EQUIV
+//config:	bool "Enable equivalence classes"
+//config:	default y
+//config:	depends on TR
+//config:	help
+//config:	  Enable equivalence classes, which essentially add the enclosed
+//config:	  character to the current set. For instance, tr [=a=] xyz would
+//config:	  replace all instances of 'a' with 'xyz'. This option is mainly
+//config:	  useful for cases when no other way of expressing a character
+//config:	  is possible.
+
+//applet:IF_TR(APPLET(tr, BB_DIR_USR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_TR) += tr.o
+
+//usage:#define tr_trivial_usage
+//usage:       "[-cds] STRING1 [STRING2]"
+//usage:#define tr_full_usage "\n\n"
+//usage:       "Translate, squeeze, or delete characters from stdin, writing to stdout\n"
+//usage:     "\n	-c	Take complement of STRING1"
+//usage:     "\n	-d	Delete input characters coded STRING1"
+//usage:     "\n	-s	Squeeze multiple output characters of STRING2 into one character"
+//usage:
+//usage:#define tr_example_usage
+//usage:       "$ echo \"gdkkn vnqkc\" | tr [a-y] [b-z]\n"
+//usage:       "hello world\n"
+
 #include "libbb.h"
 
 enum {
@@ -50,7 +92,6 @@ static void map(char *pvector,
  *   Character classes, e.g. [:upper:] ==> A...Z
  *   Equiv classess, e.g. [=A=] ==> A   (hmmmmmmm?)
  * not supported:
- *   \ooo-\ooo - octal ranges
  *   [x*N] - repeat char x N times
  *   [x*] - repeat char x until it fills STRING2:
  * # echo qwe123 | /usr/bin/tr 123456789 '[d]'
@@ -58,7 +99,7 @@ static void map(char *pvector,
  * # echo qwe123 | /usr/bin/tr 123456789 '[d*]'
  * qweddd
  */
-static unsigned expand(const char *arg, char **buffer_p)
+static unsigned expand(char *arg, char **buffer_p)
 {
 	char *buffer = *buffer_p;
 	unsigned pos = 0;
@@ -72,9 +113,17 @@ static unsigned expand(const char *arg, char **buffer_p)
 			*buffer_p = buffer = xrealloc(buffer, size);
 		}
 		if (*arg == '\\') {
+			const char *z;
 			arg++;
-			buffer[pos++] = bb_process_escape_sequence(&arg);
-			continue;
+			z = arg;
+			ac = bb_process_escape_sequence(&z);
+			arg = (char *)z;
+			arg--;
+			*arg = ac;
+			/*
+			 * fall through, there may be a range.
+			 * If not, current char will be treated anyway.
+			 */
 		}
 		if (arg[1] == '-') { /* "0-9..." */
 			ac = arg[2];
@@ -83,9 +132,15 @@ static unsigned expand(const char *arg, char **buffer_p)
 				continue; /* next iter will copy '-' and stop */
 			}
 			i = (unsigned char) *arg;
+			arg += 3; /* skip 0-9 or 0-\ */
+			if (ac == '\\') {
+				const char *z;
+				z = arg;
+				ac = bb_process_escape_sequence(&z);
+				arg = (char *)z;
+			}
 			while (i <= ac) /* ok: i is unsigned _int_ */
 				buffer[pos++] = i++;
-			arg += 3; /* skip 0-9 */
 			continue;
 		}
 		if ((ENABLE_FEATURE_TR_CLASSES || ENABLE_FEATURE_TR_EQUIV)
@@ -174,7 +229,7 @@ static unsigned expand(const char *arg, char **buffer_p)
 				buffer[pos++] = *arg; /* copy CHAR */
 				if (!arg[0] || arg[1] != '=' || arg[2] != ']')
 					bb_show_usage();
-				arg += 3;	/* skip CHAR=] */
+				arg += 3;  /* skip CHAR=] */
 				continue;
 			}
 			/* The rest of "[xyz..." cases is treated as normal
@@ -229,9 +284,9 @@ int tr_main(int argc UNUSED_PARAM, char **argv)
 	char *invec  = vector + ASCII;
 	char *outvec = vector + ASCII * 2;
 
-#define TR_OPT_complement	(3 << 0)
-#define TR_OPT_delete		(1 << 2)
-#define TR_OPT_squeeze_reps	(1 << 3)
+#define TR_OPT_complement   (3 << 0)
+#define TR_OPT_delete       (1 << 2)
+#define TR_OPT_squeeze_reps (1 << 3)
 
 	for (i = 0; i < ASCII; i++) {
 		vector[i] = i;
@@ -293,6 +348,12 @@ int tr_main(int argc UNUSED_PARAM, char **argv)
 			continue;
 		}
 		str2[out_index++] = last = coded;
+	}
+
+	if (ENABLE_FEATURE_CLEAN_UP) {
+		free(vector);
+		free(str2);
+		free(str1);
 	}
 
 	return EXIT_SUCCESS;

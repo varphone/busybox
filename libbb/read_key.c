@@ -5,18 +5,33 @@
  * Copyright (C) 2008 Rob Landley <rob@landley.net>
  * Copyright (C) 2008 Denys Vlasenko <vda.linux@googlemail.com>
  *
- * Licensed under GPL version 2, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2, see file LICENSE in this source tree.
  */
 #include "libbb.h"
 
-int64_t FAST_FUNC read_key(int fd, char *buffer)
+int64_t FAST_FUNC read_key(int fd, char *buffer, int timeout)
 {
 	struct pollfd pfd;
 	const char *seq;
 	int n;
 
-	/* Known escape sequences for cursor and function keys */
+	/* Known escape sequences for cursor and function keys.
+	 * See "Xterm Control Sequences"
+	 * http://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+	 * Array should be sorted from shortest to longest.
+	 */
 	static const char esccmds[] ALIGN1 = {
+		'\x7f'         |0x80,KEYCODE_ALT_BACKSPACE,
+		'\b'           |0x80,KEYCODE_ALT_BACKSPACE,
+		'd'            |0x80,KEYCODE_ALT_D   ,
+	/* lineedit mimics bash: Alt-f and Alt-b are forward/backward
+	 * word jumps. We cheat here and make them return ALT_LEFT/RIGHT
+	 * keycodes. This way, lineedit need no special code to handle them.
+	 * If we'll need to distinguish them, introduce new ALT_F/B keycodes,
+	 * and update lineedit to react to them.
+	 */
+		'f'            |0x80,KEYCODE_ALT_RIGHT,
+		'b'            |0x80,KEYCODE_ALT_LEFT,
 		'O','A'        |0x80,KEYCODE_UP      ,
 		'O','B'        |0x80,KEYCODE_DOWN    ,
 		'O','C'        |0x80,KEYCODE_RIGHT   ,
@@ -40,13 +55,16 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 		'[','C'        |0x80,KEYCODE_RIGHT   ,
 		'[','D'        |0x80,KEYCODE_LEFT    ,
 		/* ESC [ 1 ; 2 x, where x = A/B/C/D: Shift-<arrow> */
-		/* ESC [ 1 ; 3 x, where x = A/B/C/D: Alt-<arrow> */
+		/* ESC [ 1 ; 3 x, where x = A/B/C/D: Alt-<arrow> - implemented below */
 		/* ESC [ 1 ; 4 x, where x = A/B/C/D: Alt-Shift-<arrow> */
 		/* ESC [ 1 ; 5 x, where x = A/B/C/D: Ctrl-<arrow> - implemented below */
 		/* ESC [ 1 ; 6 x, where x = A/B/C/D: Ctrl-Shift-<arrow> */
+		/* ESC [ 1 ; 7 x, where x = A/B/C/D: Ctrl-Alt-<arrow> */
+		/* ESC [ 1 ; 8 x, where x = A/B/C/D: Ctrl-Alt-Shift-<arrow> */
 		'[','H'        |0x80,KEYCODE_HOME    , /* xterm */
-		/* [ESC] ESC [ [2] H - [Alt-][Shift-]Home */
 		'[','F'        |0x80,KEYCODE_END     , /* xterm */
+		/* [ESC] ESC [ [2] H - [Alt-][Shift-]Home (End similarly?) */
+		/* '[','Z'        |0x80,KEYCODE_SHIFT_TAB, */
 		'[','1','~'    |0x80,KEYCODE_HOME    , /* vt100? linux vt? or what? */
 		'[','2','~'    |0x80,KEYCODE_INSERT  ,
 		/* ESC [ 2 ; 3 ~ - Alt-Insert */
@@ -63,10 +81,10 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 		'[','7','~'    |0x80,KEYCODE_HOME    , /* vt100? linux vt? or what? */
 		'[','8','~'    |0x80,KEYCODE_END     , /* vt100? linux vt? or what? */
 #if 0
-		'[','1','1','~'|0x80,KEYCODE_FUN1    ,
-		'[','1','2','~'|0x80,KEYCODE_FUN2    ,
-		'[','1','3','~'|0x80,KEYCODE_FUN3    ,
-		'[','1','4','~'|0x80,KEYCODE_FUN4    ,
+		'[','1','1','~'|0x80,KEYCODE_FUN1    , /* old xterm, deprecated by ESC O P */
+		'[','1','2','~'|0x80,KEYCODE_FUN2    , /* old xterm... */
+		'[','1','3','~'|0x80,KEYCODE_FUN3    , /* old xterm... */
+		'[','1','4','~'|0x80,KEYCODE_FUN4    , /* old xterm... */
 		'[','1','5','~'|0x80,KEYCODE_FUN5    ,
 		/* [ESC] ESC [ 1 5 [;2] ~ - [Alt-][Shift-]F5 */
 		'[','1','7','~'|0x80,KEYCODE_FUN6    ,
@@ -86,9 +104,16 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 		/* '[','1',';','5','B' |0x80,KEYCODE_CTRL_DOWN , - unused */
 		'[','1',';','5','C' |0x80,KEYCODE_CTRL_RIGHT,
 		'[','1',';','5','D' |0x80,KEYCODE_CTRL_LEFT ,
+		/* '[','1',';','3','A' |0x80,KEYCODE_ALT_UP    , - unused */
+		/* '[','1',';','3','B' |0x80,KEYCODE_ALT_DOWN  , - unused */
+		'[','1',';','3','C' |0x80,KEYCODE_ALT_RIGHT,
+		'[','1',';','3','D' |0x80,KEYCODE_ALT_LEFT ,
+		/* '[','3',';','3','~' |0x80,KEYCODE_ALT_DELETE, - unused */
 		0
-		/* ESC [ Z - Shift-Tab */
 	};
+
+	pfd.fd = fd;
+	pfd.events = POLLIN;
 
 	buffer++; /* saved chars counter is in buffer[-1] now */
 
@@ -96,8 +121,18 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 	errno = 0;
 	n = (unsigned char)buffer[-1];
 	if (n == 0) {
-		/* If no data, block waiting for input.
-		 * It is tempting to read more than one byte here,
+		/* If no data, wait for input.
+		 * If requested, wait TIMEOUT ms. TIMEOUT = -1 is useful
+		 * if fd can be in non-blocking mode.
+		 */
+		if (timeout >= -1) {
+			if (safe_poll(&pfd, 1, timeout) == 0) {
+				/* Timed out */
+				errno = EAGAIN;
+				return -1;
+			}
+		}
+		/* It is tempting to read more than one byte here,
 		 * but it breaks pasting. Example: at shell prompt,
 		 * user presses "c","a","t" and then pastes "\nline\n".
 		 * When we were reading 3 bytes here, we were eating
@@ -121,8 +156,6 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 	}
 
 	/* Loop through known ESC sequences */
-	pfd.fd = fd;
-	pfd.events = POLLIN;
 	seq = esccmds;
 	while (*seq != '\0') {
 		/* n - position in sequence we did not read yet */
@@ -203,7 +236,10 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 		}
 		n++;
 		/* Try to decipher "ESC [ NNN ; NNN R" sequence */
-		if (ENABLE_FEATURE_EDITING_ASK_TERMINAL
+		if ((ENABLE_FEATURE_EDITING_ASK_TERMINAL
+		    || ENABLE_FEATURE_VI_ASK_TERMINAL
+		    || ENABLE_FEATURE_LESS_ASK_TERMINAL
+		    )
 		 && n >= 5
 		 && buffer[0] == '['
 		 && buffer[n-1] == 'R'
@@ -245,4 +281,13 @@ int64_t FAST_FUNC read_key(int fd, char *buffer)
 	 */
 	buffer[-1] = 0;
 	goto start_over;
+}
+
+void FAST_FUNC read_key_ungets(char *buffer, const char *str, unsigned len)
+{
+	unsigned cur_len = (unsigned char)buffer[0];
+	if (len > KEYCODE_BUFFER_SIZE-1 - cur_len)
+		len = KEYCODE_BUFFER_SIZE-1 - cur_len;
+	memcpy(buffer + 1 + cur_len, str, len);
+	buffer[0] += len;
 }

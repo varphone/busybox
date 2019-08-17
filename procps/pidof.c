@@ -4,8 +4,62 @@
  *
  * Copyright (C) 1999-2004 by Erik Andersen <andersen@codepoet.org>
  *
- * Licensed under the GPL version 2, see the file LICENSE in this tarball.
+ * Licensed under GPLv2, see file LICENSE in this source tree.
  */
+//config:config PIDOF
+//config:	bool "pidof"
+//config:	default y
+//config:	help
+//config:	  Pidof finds the process id's (pids) of the named programs. It prints
+//config:	  those id's on the standard output.
+//config:
+//config:config FEATURE_PIDOF_SINGLE
+//config:	bool "Enable argument for single shot (-s)"
+//config:	default y
+//config:	depends on PIDOF
+//config:	help
+//config:	  Support argument '-s' for returning only the first pid found.
+//config:
+//config:config FEATURE_PIDOF_OMIT
+//config:	bool "Enable argument for omitting pids (-o)"
+//config:	default y
+//config:	depends on PIDOF
+//config:	help
+//config:	  Support argument '-o' for omitting the given pids in output.
+//config:	  The special pid %PPID can be used to name the parent process
+//config:	  of the pidof, in other words the calling shell or shell script.
+
+//applet:IF_PIDOF(APPLET(pidof, BB_DIR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_PIDOF) += pidof.o
+
+//usage:#if (ENABLE_FEATURE_PIDOF_SINGLE || ENABLE_FEATURE_PIDOF_OMIT)
+//usage:#define pidof_trivial_usage
+//usage:       "[OPTIONS] [NAME]..."
+//usage:#define USAGE_PIDOF "\n"
+//usage:#else
+//usage:#define pidof_trivial_usage
+//usage:       "[NAME]..."
+//usage:#define USAGE_PIDOF /* none */
+//usage:#endif
+//usage:#define pidof_full_usage "\n\n"
+//usage:       "List PIDs of all processes with names that match NAMEs"
+//usage:	USAGE_PIDOF
+//usage:	IF_FEATURE_PIDOF_SINGLE(
+//usage:     "\n	-s	Show only one PID"
+//usage:	)
+//usage:	IF_FEATURE_PIDOF_OMIT(
+//usage:     "\n	-o PID	Omit given pid"
+//usage:     "\n		Use %PPID to omit pid of pidof's parent"
+//usage:	)
+//usage:
+//usage:#define pidof_example_usage
+//usage:       "$ pidof init\n"
+//usage:       "1\n"
+//usage:	IF_FEATURE_PIDOF_OMIT(
+//usage:       "$ pidof /bin/sh\n20351 5973 5950\n")
+//usage:	IF_FEATURE_PIDOF_OMIT(
+//usage:       "$ pidof /bin/sh -o %PPID\n20351 5950")
 
 #include "libbb.h"
 
@@ -23,13 +77,12 @@ int pidof_main(int argc UNUSED_PARAM, char **argv)
 	unsigned opt;
 #if ENABLE_FEATURE_PIDOF_OMIT
 	llist_t *omits = NULL; /* list of pids to omit */
-	opt_complementary = "o::";
 #endif
 
 	/* do unconditional option parsing */
 	opt = getopt32(argv, ""
 			IF_FEATURE_PIDOF_SINGLE ("s")
-			IF_FEATURE_PIDOF_OMIT("o:", &omits));
+			IF_FEATURE_PIDOF_OMIT("o:*", &omits));
 
 #if ENABLE_FEATURE_PIDOF_OMIT
 	/* fill omit list.  */

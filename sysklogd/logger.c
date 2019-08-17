@@ -4,8 +4,32 @@
  *
  * Copyright (C) 1999-2004 by Erik Andersen <andersen@codepoet.org>
  *
- * Licensed under GPLv2 or later, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
+//config:config LOGGER
+//config:	bool "logger"
+//config:	default y
+//config:	select FEATURE_SYSLOG
+//config:	help
+//config:	    The logger utility allows you to send arbitrary text
+//config:	    messages to the system log (i.e. the 'syslogd' utility) so
+//config:	    they can be logged. This is generally used to help locate
+//config:	    problems that occur within programs and scripts.
+
+//applet:IF_LOGGER(APPLET(logger, BB_DIR_USR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_LOGGER) += syslogd_and_logger.o
+
+//usage:#define logger_trivial_usage
+//usage:       "[OPTIONS] [MESSAGE]"
+//usage:#define logger_full_usage "\n\n"
+//usage:       "Write MESSAGE (or stdin) to syslog\n"
+//usage:     "\n	-s	Log to stderr as well as the system log"
+//usage:     "\n	-t TAG	Log using the specified tag (defaults to user name)"
+//usage:     "\n	-p PRIO	Priority (numeric or facility.level pair)"
+//usage:
+//usage:#define logger_example_usage
+//usage:       "$ logger \"hello\"\n"
 
 /*
  * Done in syslogd_and_logger.c:
@@ -75,6 +99,8 @@ int logger_main(int argc UNUSED_PARAM, char **argv)
 	int opt;
 	int i = 0;
 
+	setup_common_bufsiz();
+
 	/* Fill out the name string early (may be overwritten later) */
 	str_t = uid2uname_utoa(geteuid());
 
@@ -121,7 +147,7 @@ int logger_main(int argc UNUSED_PARAM, char **argv)
 
 /*-
  * Copyright (c) 1983, 1993
- *	The Regents of the University of California.  All rights reserved.
+ * The Regents of the University of California.  All rights reserved.
  *
  * This is the original license statement for the decode and pencode functions.
  *
@@ -134,8 +160,8 @@ int logger_main(int argc UNUSED_PARAM, char **argv)
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * 3. <BSD Advertising Clause omitted per the July 22, 1999 licensing change
- *		ftp://ftp.cs.berkeley.edu/pub/4bsd/README.Impt.License.Change>
+ * 3. BSD Advertising Clause omitted per the July 22, 1999 licensing change
+ *    ftp://ftp.cs.berkeley.edu/pub/4bsd/README.Impt.License.Change
  *
  * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software

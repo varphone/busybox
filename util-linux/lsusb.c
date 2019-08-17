@@ -1,12 +1,29 @@
 /* vi: set sw=4 ts=4: */
 /*
-* lspci implementation for busybox
-*
-* Copyright (C) 2009  Malek Degachi <malek-degachi@laposte.net>
-*
-* Licensed under the GPL v2 or later, see the file LICENSE in this tarball.
-*/
-#include <libbb.h>
+ * lsusb implementation for busybox
+ *
+ * Copyright (C) 2009  Malek Degachi <malek-degachi@laposte.net>
+ *
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
+ */
+//config:config LSUSB
+//config:	bool "lsusb"
+//config:	default y
+//config:	#select PLATFORM_LINUX
+//config:	help
+//config:	  lsusb is a utility for displaying information about USB buses in the
+//config:	  system and devices connected to them.
+//config:
+//config:	  This version uses sysfs (/sys/bus/usb/devices) only.
+
+//applet:IF_LSUSB(APPLET(lsusb, BB_DIR_USR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_LSUSB) += lsusb.o
+
+//usage:#define lsusb_trivial_usage NOUSAGE_STR
+//usage:#define lsusb_full_usage ""
+
+#include "libbb.h"
 
 static int FAST_FUNC fileAction(
 		const char *fileName,
@@ -15,23 +32,17 @@ static int FAST_FUNC fileAction(
 		int depth UNUSED_PARAM)
 {
 	parser_t *parser;
-	char *tokens[6];
-	char *bus = NULL, *device = NULL;
+	char *tokens[4];
+	char *busnum = NULL, *devnum = NULL;
 	int product_vid = 0, product_did = 0;
-
 	char *uevent_filename = concat_path_file(fileName, "/uevent");
+
 	parser = config_open2(uevent_filename, fopen_for_read);
 	free(uevent_filename);
 
-	while (config_read(parser, tokens, 6, 1, "\\/=", PARSE_NORMAL)) {
+	while (config_read(parser, tokens, 4, 2, "\\/=", PARSE_NORMAL)) {
 		if ((parser->lineno == 1) && strcmp(tokens[0], "DEVTYPE") == 0) {
 			break;
-		}
-
-		if (strcmp(tokens[0], "DEVICE") == 0) {
-			bus = xstrdup(tokens[4]);
-			device = xstrdup(tokens[5]);
-			continue;
 		}
 
 		if (strcmp(tokens[0], "PRODUCT") == 0) {
@@ -39,13 +50,23 @@ static int FAST_FUNC fileAction(
 			product_did = xstrtou(tokens[2], 16);
 			continue;
 		}
+
+		if (strcmp(tokens[0], "BUSNUM") == 0) {
+			busnum = xstrdup(tokens[1]);
+			continue;
+		}
+
+		if (strcmp(tokens[0], "DEVNUM") == 0) {
+			devnum = xstrdup(tokens[1]);
+			continue;
+		}
 	}
 	config_close(parser);
 
-	if (bus) {
-		printf("Bus %s Device %s: ID %04x:%04x\n", bus, device, product_vid, product_did);
-		free(bus);
-		free(device);
+	if (busnum) {
+		printf("Bus %s Device %s: ID %04x:%04x\n", busnum, devnum, product_vid, product_did);
+		free(busnum);
+		free(devnum);
 	}
 
 	return TRUE;

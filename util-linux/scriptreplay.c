@@ -4,9 +4,25 @@
  *
  * pascal.bellard@ads-lu.com
  *
- * Licensed under GPLv2 or later, see file License in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  *
  */
+//config:config SCRIPTREPLAY
+//config:	bool "scriptreplay"
+//config:	default y
+//config:	help
+//config:	  This program replays a typescript, using timing information
+//config:	  given by script -t.
+
+//applet:IF_SCRIPTREPLAY(APPLET(scriptreplay, BB_DIR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_SCRIPTREPLAY) += scriptreplay.o
+
+//usage:#define scriptreplay_trivial_usage
+//usage:       "timingfile [typescript [divisor]]"
+//usage:#define scriptreplay_full_usage "\n\n"
+//usage:       "Play back typescripts, using timing information"
+
 #include "libbb.h"
 
 int scriptreplay_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;

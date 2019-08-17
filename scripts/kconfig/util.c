@@ -57,7 +57,7 @@ int file_write_dep(const char *name)
 }
 
 
-/* Allocate initial growable sting */
+/* Allocate initial growable string */
 struct gstr str_new(void)
 {
 	struct gstr gs;
@@ -79,8 +79,7 @@ struct gstr str_assign(const char *s)
 /* Free storage for growable string */
 void str_free(struct gstr *gs)
 {
-	if (gs->s)
-		free(gs->s);
+	free(gs->s);
 	gs->s = NULL;
 	gs->len = 0;
 }
@@ -112,4 +111,3 @@ const char *str_get(struct gstr *gs)
 {
 	return gs->s;
 }
-

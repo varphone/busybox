@@ -18,6 +18,17 @@
  *	Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 
+//kbuild:lib-$(CONFIG_FEATURE_VOLUMEID_FAT) += fat.o
+
+//config:
+//config:config FEATURE_VOLUMEID_FAT
+//config:	bool "fat filesystem"
+//config:	default y
+//config:	depends on VOLUMEID
+//config:	help
+//config:	  TODO
+//config:
+
 #include "volume_id_internal.h"
 
 /* linux/msdos_fs.h says: */
@@ -173,18 +184,22 @@ int FAST_FUNC volume_id_probe_vfat(struct volume_id *id /*,uint64_t fat_partitio
 	 */
 
 	/* boot jump address check */
-	if ((vs->boot_jump[0] != 0xeb || vs->boot_jump[2] != 0x90) &&
-	     vs->boot_jump[0] != 0xe9)
+	if ((vs->boot_jump[0] != 0xeb || vs->boot_jump[2] != 0x90)
+	 && vs->boot_jump[0] != 0xe9
+	) {
 		return -1;
+	}
 
 	/* heads check */
 	if (vs->heads == 0)
 		return -1;
 
 	/* cluster size check */
-	if (vs->sectors_per_cluster == 0 ||
-	    (vs->sectors_per_cluster & (vs->sectors_per_cluster-1)))
+	if (vs->sectors_per_cluster == 0
+	 || (vs->sectors_per_cluster & (vs->sectors_per_cluster-1))
+	) {
 		return -1;
+	}
 
 	/* media check */
 	if (vs->media < 0xf8 && vs->media != 0xf0)
@@ -197,9 +212,11 @@ int FAST_FUNC volume_id_probe_vfat(struct volume_id *id /*,uint64_t fat_partitio
  valid:
 	/* sector size check */
 	sector_size_bytes = le16_to_cpu(vs->sector_size_bytes);
-	if (sector_size_bytes != 0x200 && sector_size_bytes != 0x400 &&
-	    sector_size_bytes != 0x800 && sector_size_bytes != 0x1000)
+	if (sector_size_bytes != 0x200 && sector_size_bytes != 0x400
+	 && sector_size_bytes != 0x800 && sector_size_bytes != 0x1000
+	) {
 		return -1;
+	}
 
 	dbg("sector_size_bytes 0x%x", sector_size_bytes);
 	dbg("sectors_per_cluster 0x%x", vs->sectors_per_cluster);
@@ -326,7 +343,7 @@ int FAST_FUNC volume_id_probe_vfat(struct volume_id *id /*,uint64_t fat_partitio
 
  ret:
 //	volume_id_set_usage(id, VOLUME_ID_FILESYSTEM);
-//	id->type = "vfat";
+	IF_FEATURE_BLKID_TYPE(id->type = "vfat";)
 
 	return 0;
 }

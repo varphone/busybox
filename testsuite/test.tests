@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Copyright 2007 by Denys Vlasenko <vda.linux@googlemail.com>
-# Licensed under GPL v2, see file LICENSE for details.
+# Licensed under GPLv2, see file LICENSE in this source tree.
 
 . ./testing.sh
 
@@ -74,6 +74,26 @@ testing "test ! a = b -a ! c = c: should be false (1)" \
 testing "test ! a = b -a ! c = d: should be true (0)" \
 	"busybox test ! a = b -a ! c = d; echo \$?" \
 	"0\n" \
+	"" ""
+
+testing "test '!' = '!': should be true (0)" \
+	"busybox test '!' = '!'; echo \$?" \
+	"0\n" \
+	"" ""
+
+testing "test '(' = '(': should be true (0)" \
+	"busybox test '(' = '('; echo \$?" \
+	"0\n" \
+	"" ""
+
+testing "test '!' '!' = '!': should be false (1)" \
+	"busybox test '!' '!' = '!'; echo \$?" \
+	"1\n" \
+	"" ""
+
+testing "test '!' '(' = '(': should be false (1)" \
+	"busybox test '!' '(' = '('; echo \$?" \
+	"1\n" \
 	"" ""
 
 exit $FAILCOUNT

@@ -11,7 +11,7 @@
  * Modified to be able to add or delete users, groups and users to/from groups
  * by Tito Ragusa <farmatito@tiscali.it>
  *
- * Licensed under GPLv2, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2, see file LICENSE in this source tree.
  */
 #include "libbb.h"
 
@@ -22,7 +22,7 @@ static void check_selinux_update_passwd(const char *username)
 	char *seuser;
 
 	if (getuid() != (uid_t)0 || is_selinux_enabled() == 0)
-		return;		/* No need to check */
+		return;  /* No need to check */
 
 	if (getprevcon_raw(&context) < 0)
 		bb_perror_msg_and_die("getprevcon failed");
@@ -30,7 +30,18 @@ static void check_selinux_update_passwd(const char *username)
 	if (!seuser)
 		bb_error_msg_and_die("invalid context '%s'", context);
 	if (strcmp(seuser, username) != 0) {
-		if (checkPasswdAccess(PASSWD__PASSWD) != 0)
+		security_class_t tclass;
+		access_vector_t av;
+
+		tclass = string_to_security_class("passwd");
+		if (tclass == 0)
+			goto die;
+		av = string_to_av_perm(tclass, "passwd");
+		if (av == 0)
+			goto die;
+
+		if (selinux_check_passwd_access(av) != 0)
+ die:
 			bb_error_msg_and_die("SELinux: access denied");
 	}
 	if (ENABLE_FEATURE_CLEAN_UP)
@@ -58,9 +69,11 @@ static void check_selinux_update_passwd(const char *username)
  6) delete a user from a group: update_passwd(FILE, GROUP, NULL, MEMBER)
     only if CONFIG_FEATURE_DEL_USER_FROM_GROUP=y and member != NULL
 
- 7) change user's passord: update_passwd(FILE, USER, NEW_PASSWD, NULL)
+ 7) change user's password: update_passwd(FILE, USER, NEW_PASSWD, NULL)
     only if CONFIG_PASSWD=y and applet_name[0] == 'p' like in passwd
     or if CONFIG_CHPASSWD=y and applet_name[0] == 'c' like in chpasswd
+
+ 8) delete a user from all groups: update_passwd(FILE, NULL, NULL, MEMBER)
 
  This function does not validate the arguments fed to it
  so the calling program should take care of that.
@@ -82,7 +95,6 @@ int FAST_FUNC update_passwd(const char *filename,
 	char *fnamesfx;
 	char *sfx_char;
 	char *name_colon;
-	unsigned user_len;
 	int old_fd;
 	int new_fd;
 	int i;
@@ -99,13 +111,13 @@ int FAST_FUNC update_passwd(const char *filename,
 	if (filename == NULL)
 		return ret;
 
-	check_selinux_update_passwd(name);
+	if (name)
+		check_selinux_update_passwd(name);
 
 	/* New passwd file, "/etc/passwd+" for now */
 	fnamesfx = xasprintf("%s+", filename);
 	sfx_char = &fnamesfx[strlen(fnamesfx)-1];
-	name_colon = xasprintf("%s:", name);
-	user_len = strlen(name_colon);
+	name_colon = xasprintf("%s:", name ? name : "");
 
 	if (shadow)
 		old_fp = fopen(filename, "r+");
@@ -133,7 +145,7 @@ int FAST_FUNC update_passwd(const char *filename,
 	goto close_old_fp;
 
  created:
-	if (!fstat(old_fd, &sb)) {
+	if (fstat(old_fd, &sb) == 0) {
 		fchmod(new_fd, sb.st_mode & 0777); /* ignore errors */
 		fchown(new_fd, sb.st_uid, sb.st_gid);
 	}
@@ -167,13 +179,47 @@ int FAST_FUNC update_passwd(const char *filename,
 		line = xmalloc_fgetline(old_fp);
 		if (!line) /* EOF/error */
 			break;
-		if (strncmp(name_colon, line, user_len) != 0) {
+
+#if ENABLE_FEATURE_ADDUSER_TO_GROUP || ENABLE_FEATURE_DEL_USER_FROM_GROUP
+		if (!name && member) {
+			/* Delete member from all groups */
+			/* line is "GROUP:PASSWD:[member1[,member2]...]" */
+			unsigned member_len = strlen(member);
+			char *list = strrchr(line, ':');
+			while (list) {
+				list++;
+ next_list_element:
+				if (is_prefixed_with(list, member)) {
+					char c;
+					changed_lines++;
+					c = list[member_len];
+					if (c == '\0') {
+						if (list[-1] == ',')
+							list--;
+						*list = '\0';
+						break;
+					}
+					if (c == ',') {
+						overlapping_strcpy(list, list + member_len + 1);
+						goto next_list_element;
+					}
+					changed_lines--;
+				}
+				list = strchr(list, ',');
+			}
+			fprintf(new_fp, "%s\n", line);
+			goto next;
+		}
+#endif
+
+		cp = is_prefixed_with(line, name_colon);
+		if (!cp) {
 			fprintf(new_fp, "%s\n", line);
 			goto next;
 		}
 
 		/* We have a match with "name:"... */
-		cp = line + user_len; /* move past name: */
+		/* cp points past "name:" */
 
 #if ENABLE_FEATURE_ADDUSER_TO_GROUP || ENABLE_FEATURE_DEL_USER_FROM_GROUP
 		if (member) {

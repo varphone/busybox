@@ -5,7 +5,7 @@
  * Copyright (C) 2001 by Matt Kraai <kraai@alumni.carnegiemellon.edu>
  * SELinux support by Yuichi Nakamura <ynakam@hitachisoft.jp>
  *
- * Licensed under GPLv2 or later, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
 #include "libbb.h"
 
@@ -64,6 +64,11 @@ static int ask_and_unlink(const char *dest, int flags)
 		bb_perror_msg("can't create '%s'", dest);
 		return -1; /* error */
 	}
+#if ENABLE_FEATURE_CP_LONG_OPTIONS
+	if (flags & FILEUTILS_RMDEST)
+		if (flags & FILEUTILS_VERBOSE)
+			printf("removed '%s'\n", dest);
+#endif
 	return 1; /* ok (to try again) */
 }
 
@@ -78,9 +83,9 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 	/* NB: each struct stat is ~100 bytes */
 	struct stat source_stat;
 	struct stat dest_stat;
-	signed char retval = 0;
-	signed char dest_exists = 0;
-	signed char ovr;
+	smallint retval = 0;
+	smallint dest_exists = 0;
+	smallint ovr;
 
 /* Inverse of cp -d ("cp without -d") */
 #define FLAGS_DEREF (flags & (FILEUTILS_DEREFERENCE + FILEUTILS_DEREFERENCE_L0))
@@ -147,7 +152,6 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 			return -1;
 		}
 
-		/* Create DEST */
 		if (dest_exists) {
 			if (!S_ISDIR(dest_stat.st_mode)) {
 				bb_error_msg("target '%s' is not a directory", dest);
@@ -156,6 +160,7 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 			/* race here: user can substitute a symlink between
 			 * this check and actual creation of files inside dest */
 		} else {
+			/* Create DEST */
 			mode_t mode;
 			saved_umask = umask(0);
 
@@ -208,6 +213,22 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 			/* retval = -1; - WRONG! copy *WAS* made */
 		}
 		goto preserve_mode_ugid_time;
+	}
+
+	if (dest_exists) {
+		if (flags & FILEUTILS_UPDATE) {
+			if (source_stat.st_mtime <= dest_stat.st_mtime) {
+				return 0; /* source file must be newer */
+			}
+		}
+#if ENABLE_FEATURE_CP_LONG_OPTIONS
+		if (flags & FILEUTILS_RMDEST) {
+			ovr = ask_and_unlink(dest, flags);
+			if (ovr <= 0)
+				return ovr;
+			dest_exists = 0;
+		}
+#endif
 	}
 
 	if (flags & (FILEUTILS_MAKE_SOFTLINK|FILEUTILS_MAKE_HARDLINK)) {
@@ -275,11 +296,16 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 		if (!S_ISREG(source_stat.st_mode))
 			new_mode = 0666;
 
-		// POSIX way is a security problem versus (sym)link attacks
-		if (!ENABLE_FEATURE_NON_POSIX_CP) {
-			dst_fd = open(dest, O_WRONLY|O_CREAT|O_TRUNC, new_mode);
-		} else { /* safe way: */
+		if (ENABLE_FEATURE_NON_POSIX_CP || (flags & FILEUTILS_INTERACTIVE)) {
+			/*
+			 * O_CREAT|O_EXCL: require that file did not exist before creation
+			 */
 			dst_fd = open(dest, O_WRONLY|O_CREAT|O_EXCL, new_mode);
+		} else { /* POSIX, and not "cp -i" */
+			/*
+			 * O_CREAT|O_TRUNC: create, or truncate (security problem versus (sym)link attacks)
+			 */
+			dst_fd = open(dest, O_WRONLY|O_CREAT|O_TRUNC, new_mode);
 		}
 		if (dst_fd == -1) {
 			ovr = ask_and_unlink(dest, flags);
@@ -316,9 +342,9 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 #endif
 		if (bb_copyfd_eof(src_fd, dst_fd) == -1)
 			retval = -1;
-		/* Ok, writing side I can understand... */
+		/* Careful with writing... */
 		if (close(dst_fd) < 0) {
-			bb_perror_msg("can't close '%s'", dest);
+			bb_perror_msg("error writing to '%s'", dest);
 			retval = -1;
 		}
 		/* ...but read size is already checked by bb_copyfd_eof */
@@ -354,7 +380,7 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 		}
 		/* _Not_ jumping to preserve_mode_ugid_time:
 		 * symlinks don't have those */
-		return 0;
+		goto verb_and_exit;
 	}
 	if (S_ISBLK(source_stat.st_mode) || S_ISCHR(source_stat.st_mode)
 	 || S_ISSOCK(source_stat.st_mode) || S_ISFIFO(source_stat.st_mode)
@@ -387,6 +413,11 @@ int FAST_FUNC copy_file(const char *source, const char *dest, int flags)
 		}
 		if (chmod(dest, source_stat.st_mode) < 0)
 			bb_perror_msg("can't preserve %s of '%s'", "permissions", dest);
+	}
+
+ verb_and_exit:
+	if (flags & FILEUTILS_VERBOSE) {
+		printf("'%s' -> '%s'\n", source, dest);
 	}
 
 	return retval;

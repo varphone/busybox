@@ -7,12 +7,43 @@
  * Reworked by (C) 2002 Vladimir Oleynik <dzo@simtreas.ru>
  *  to correctly parse '-rwxgoa'
  *
- * Licensed under GPLv2 or later, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
+//config:config CHMOD
+//config:	bool "chmod"
+//config:	default y
+//config:	help
+//config:	  chmod is used to change the access permission of files.
+
+//applet:IF_CHMOD(APPLET_NOEXEC(chmod, chmod, BB_DIR_BIN, BB_SUID_DROP, chmod))
+
+//kbuild:lib-$(CONFIG_CHMOD) += chmod.o
 
 /* BB_AUDIT SUSv3 compliant */
 /* BB_AUDIT GNU defects - unsupported long options. */
 /* http://www.opengroup.org/onlinepubs/007904975/utilities/chmod.html */
+
+//usage:#define chmod_trivial_usage
+//usage:       "[-R"IF_DESKTOP("cvf")"] MODE[,MODE]... FILE..."
+//usage:#define chmod_full_usage "\n\n"
+//usage:       "Each MODE is one or more of the letters ugoa, one of the\n"
+//usage:       "symbols +-= and one or more of the letters rwxst\n"
+//usage:     "\n	-R	Recurse"
+//usage:	IF_DESKTOP(
+//usage:     "\n	-c	List changed files"
+//usage:     "\n	-v	List all files"
+//usage:     "\n	-f	Hide errors"
+//usage:	)
+//usage:
+//usage:#define chmod_example_usage
+//usage:       "$ ls -l /tmp/foo\n"
+//usage:       "-rw-rw-r--    1 root     root            0 Apr 12 18:25 /tmp/foo\n"
+//usage:       "$ chmod u+x /tmp/foo\n"
+//usage:       "$ ls -l /tmp/foo\n"
+//usage:       "-rwxrw-r--    1 root     root            0 Apr 12 18:25 /tmp/foo*\n"
+//usage:       "$ chmod 444 /tmp/foo\n"
+//usage:       "$ ls -l /tmp/foo\n"
+//usage:       "-r--r--r--    1 root     root            0 Apr 12 18:25 /tmp/foo\n"
 
 #include "libbb.h"
 
@@ -47,10 +78,10 @@ static int FAST_FUNC fileAction(const char *fileName, struct stat *statbuf, void
 		if (S_ISLNK(statbuf->st_mode))
 			return TRUE;
 	}
-	newmode = statbuf->st_mode;
 
-	if (!bb_parse_mode((char *)param, &newmode))
-		bb_error_msg_and_die("invalid mode: %s", (char *)param);
+	newmode = bb_parse_mode((char *)param, statbuf->st_mode);
+	if (newmode == (mode_t)-1)
+		bb_error_msg_and_die("invalid mode '%s'", (char *)param);
 
 	if (chmod(fileName, newmode) == 0) {
 		if (OPT_VERBOSE

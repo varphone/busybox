@@ -4,8 +4,36 @@
  *
  * Copyright (C) 2000,2001 Matt Kraai <kraai@alumni.carnegiemellon.edu>
  *
- * Licensed under GPL v2 or later, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
+//config:config READLINK
+//config:	bool "readlink"
+//config:	default y
+//config:	help
+//config:	  This program reads a symbolic link and returns the name
+//config:	  of the file it points to
+//config:
+//config:config FEATURE_READLINK_FOLLOW
+//config:	bool "Enable canonicalization by following all symlinks (-f)"
+//config:	default y
+//config:	depends on READLINK
+//config:	help
+//config:	  Enable the readlink option (-f).
+
+//applet:IF_READLINK(APPLET(readlink, BB_DIR_USR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_READLINK) += readlink.o
+
+//usage:#define readlink_trivial_usage
+//usage:	IF_FEATURE_READLINK_FOLLOW("[-fnv] ") "FILE"
+//usage:#define readlink_full_usage "\n\n"
+//usage:       "Display the value of a symlink"
+//usage:	IF_FEATURE_READLINK_FOLLOW( "\n"
+//usage:     "\n	-f	Canonicalize by following all symlinks"
+//usage:     "\n	-n	Don't add newline"
+//usage:     "\n	-v	Verbose"
+//usage:	)
+
 #include "libbb.h"
 
 /*
@@ -28,7 +56,10 @@
  *   -q, --quiet, -s, --silent     suppress most error messages
  *   -v, --verbose                 report error messages
  *
- * bbox supports: -f -n -v (fully), -q -s (accepts but ignores)
+ * bbox supports: -f (partially) -n -v (fully), -q -s (accepts but ignores)
+ * Note: we export the -f flag, but our -f behaves like coreutils' -e.
+ * Unfortunately, there isn't a C lib function we can leverage to get this
+ * behavior which means we'd have to implement the full stack ourselves :(.
  */
 
 int readlink_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
@@ -36,7 +67,6 @@ int readlink_main(int argc UNUSED_PARAM, char **argv)
 {
 	char *buf;
 	char *fname;
-	char pathbuf[PATH_MAX];
 
 	IF_FEATURE_READLINK_FOLLOW(
 		unsigned opt;
@@ -56,7 +86,7 @@ int readlink_main(int argc UNUSED_PARAM, char **argv)
 		logmode = LOGMODE_NONE;
 
 	if (opt & 1) { /* -f */
-		buf = realpath(fname, pathbuf);
+		buf = xmalloc_realpath(fname);
 	} else {
 		buf = xmalloc_readlink_or_warn(fname);
 	}
@@ -65,7 +95,7 @@ int readlink_main(int argc UNUSED_PARAM, char **argv)
 		return EXIT_FAILURE;
 	printf((opt & 2) ? "%s" : "%s\n", buf);
 
-	if (ENABLE_FEATURE_CLEAN_UP && !opt)
+	if (ENABLE_FEATURE_CLEAN_UP)
 		free(buf);
 
 	fflush_stdout_and_exit(EXIT_SUCCESS);

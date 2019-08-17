@@ -4,8 +4,52 @@
  *
  * Copyright (C) 2007 Loic Grenie <loic.grenie@gmail.com>
  *
- * Licensed under the GPL v2 or later, see the file LICENSE in this tarball.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  */
+//config:config PGREP
+//config:	bool "pgrep"
+//config:	default y
+//config:	help
+//config:	  Look for processes by name.
+//config:
+//config:config PKILL
+//config:	bool "pkill"
+//config:	default y
+//config:	help
+//config:	  Send signals to processes by name.
+
+//applet:IF_PGREP(APPLET(pgrep, BB_DIR_USR_BIN, BB_SUID_DROP))
+//applet:IF_PKILL(APPLET_ODDNAME(pkill, pgrep, BB_DIR_USR_BIN, BB_SUID_DROP, pkill))
+
+//kbuild:lib-$(CONFIG_PGREP) += pgrep.o
+//kbuild:lib-$(CONFIG_PKILL) += pgrep.o
+
+//usage:#define pgrep_trivial_usage
+//usage:       "[-flnovx] [-s SID|-P PPID|PATTERN]"
+//usage:#define pgrep_full_usage "\n\n"
+//usage:       "Display process(es) selected by regex PATTERN\n"
+//usage:     "\n	-l	Show command name too"
+//usage:     "\n	-f	Match against entire command line"
+//usage:     "\n	-n	Show the newest process only"
+//usage:     "\n	-o	Show the oldest process only"
+//usage:     "\n	-v	Negate the match"
+//usage:     "\n	-x	Match whole name (not substring)"
+//usage:     "\n	-s	Match session ID (0 for current)"
+//usage:     "\n	-P	Match parent process ID"
+//usage:
+//usage:#define pkill_trivial_usage
+//usage:       "[-l|-SIGNAL] [-fnovx] [-s SID|-P PPID|PATTERN]"
+//usage:#define pkill_full_usage "\n\n"
+//usage:       "Send a signal to process(es) selected by regex PATTERN\n"
+//usage:     "\n	-l	List all signals"
+//usage:     "\n	-f	Match against entire command line"
+//usage:     "\n	-n	Signal the newest process only"
+//usage:     "\n	-o	Signal the oldest process only"
+//usage:     "\n	-v	Negate the match"
+//usage:     "\n	-x	Match whole name (not substring)"
+//usage:     "\n	-s	Match session ID (0 for current)"
+//usage:     "\n	-P	Match parent process ID"
+
 #include "libbb.h"
 #include "xregex.h"
 
@@ -38,9 +82,9 @@ static void act(unsigned pid, char *cmd, int signo)
 {
 	if (pgrep) {
 		if (option_mask32 & (1 << OPTBIT_L)) /* OPT_LIST */
-			printf("%d %s\n", pid, cmd);
+			printf("%u %s\n", pid, cmd);
 		else
-			printf("%d\n", pid);
+			printf("%u\n", pid);
 	} else
 		kill(pid, signo);
 }
@@ -79,8 +123,7 @@ int pgrep_main(int argc UNUSED_PARAM, char **argv)
 	/* Parse remaining options */
 	ppid2match = -1;
 	sid2match = -1;
-	opt_complementary = "s+:P+"; /* numeric opts */
-	opt = getopt32(argv, "vlfxons:P:", &sid2match, &ppid2match);
+	opt = getopt32(argv, "vlfxons:+P:+", &sid2match, &ppid2match);
 	argv += optind;
 
 	if (pkill && OPT_LIST) { /* -l: print the whole signal list */
@@ -101,7 +144,7 @@ int pgrep_main(int argc UNUSED_PARAM, char **argv)
 		bb_show_usage();
 
 	if (argv[0])
-		xregcomp(&re_buffer, argv[0], 0);
+		xregcomp(&re_buffer, argv[0], OPT_ANCHOR ? REG_EXTENDED : (REG_EXTENDED|REG_NOSUB));
 
 	matched_pid = 0;
 	cmd_last = NULL;
@@ -125,13 +168,14 @@ int pgrep_main(int argc UNUSED_PARAM, char **argv)
 
 		if (ppid2match >= 0 && ppid2match != proc->ppid)
 			continue;
-		if (sid2match >= 0  && sid2match != proc->sid)
+		if (sid2match >= 0 && sid2match != proc->sid)
 			continue;
 
 		/* NB: OPT_INVERT is always 0 or 1 */
-		if (!argv[0] ||
-		    (regexec(&re_buffer, cmd, 1, re_match, 0) == 0 /* match found */
-		     && (!OPT_ANCHOR || (re_match[0].rm_so == 0 && re_match[0].rm_eo == (regoff_t)strlen(cmd)))) ^ OPT_INVERT
+		if (!argv[0]
+		 || (regexec(&re_buffer, cmd, 1, re_match, 0) == 0 /* match found */
+		    && (!OPT_ANCHOR || (re_match[0].rm_so == 0 && re_match[0].rm_eo == (regoff_t)strlen(cmd)))
+		    ) ^ OPT_INVERT
 		) {
 			matched_pid = proc->pid;
 			if (OPT_LAST) {

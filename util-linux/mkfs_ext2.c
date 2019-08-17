@@ -5,20 +5,73 @@
  *
  * Busybox'ed (2009) by Vladimir Dronnikov <dronnikov@gmail.com>
  *
- * Licensed under GPLv2, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2, see file LICENSE in this source tree.
  */
+//config:config MKE2FS
+//config:	bool "mke2fs"
+//config:	default y
+//config:	select PLATFORM_LINUX
+//config:	help
+//config:	  Utility to create EXT2 filesystems.
+//config:
+//config:config MKFS_EXT2
+//config:	bool "mkfs.ext2"
+//config:	default y
+//config:	select PLATFORM_LINUX
+//config:	help
+//config:	  Alias to "mke2fs".
+
+//applet:IF_MKE2FS(APPLET_ODDNAME(mke2fs, mkfs_ext2, BB_DIR_SBIN, BB_SUID_DROP, mkfs_ext2))
+//applet:IF_MKFS_EXT2(APPLET_ODDNAME(mkfs.ext2, mkfs_ext2, BB_DIR_SBIN, BB_SUID_DROP, mkfs_ext2))
+////////:IF_MKFS_EXT3(APPLET_ODDNAME(mkfs.ext3, mkfs_ext2, BB_DIR_SBIN, BB_SUID_DROP, mkfs_ext2))
+
+//kbuild:lib-$(CONFIG_MKE2FS) += mkfs_ext2.o
+//kbuild:lib-$(CONFIG_MKFS_EXT2) += mkfs_ext2.o
+
+//usage:#define mkfs_ext2_trivial_usage
+//usage:       "[-Fn] "
+/* //usage:    "[-c|-l filename] " */
+//usage:       "[-b BLK_SIZE] "
+/* //usage:    "[-f fragment-size] [-g blocks-per-group] " */
+//usage:       "[-i INODE_RATIO] [-I INODE_SIZE] "
+/* //usage:    "[-j] [-J journal-options] [-N number-of-inodes] " */
+//usage:       "[-m RESERVED_PERCENT] "
+/* //usage:    "[-o creator-os] [-O feature[,...]] [-q] " */
+/* //usage:    "[r fs-revision-level] [-E extended-options] [-v] [-F] " */
+//usage:       "[-L LABEL] "
+/* //usage:    "[-M last-mounted-directory] [-S] [-T filesystem-type] " */
+//usage:       "BLOCKDEV [KBYTES]"
+//usage:#define mkfs_ext2_full_usage "\n\n"
+//usage:       "	-b BLK_SIZE	Block size, bytes"
+/* //usage:  "\n	-c		Check device for bad blocks" */
+/* //usage:  "\n	-E opts		Set extended options" */
+/* //usage:  "\n	-f size		Fragment size in bytes" */
+//usage:     "\n	-F		Force"
+/* //usage:  "\n	-g N		Number of blocks in a block group" */
+//usage:     "\n	-i RATIO	Max number of files is filesystem_size / RATIO"
+//usage:     "\n	-I BYTES	Inode size (min 128)"
+/* //usage:  "\n	-j		Create a journal (ext3)" */
+/* //usage:  "\n	-J opts		Set journal options (size/device)" */
+/* //usage:  "\n	-l file		Read bad blocks list from file" */
+//usage:     "\n	-L LBL		Volume label"
+//usage:     "\n	-m PERCENT	Percent of blocks to reserve for admin"
+/* //usage:  "\n	-M dir		Set last mounted directory" */
+//usage:     "\n	-n		Dry run"
+/* //usage:  "\n	-N N		Number of inodes to create" */
+/* //usage:  "\n	-o os		Set the 'creator os' field" */
+/* //usage:  "\n	-O features	Dir_index/filetype/has_journal/journal_dev/sparse_super" */
+/* //usage:  "\n	-q		Quiet" */
+/* //usage:  "\n	-r rev		Set filesystem revision" */
+/* //usage:  "\n	-S		Write superblock and group descriptors only" */
+/* //usage:  "\n	-T fs-type	Set usage type (news/largefile/largefile4)" */
+/* //usage:  "\n	-v		Verbose" */
+
 #include "libbb.h"
 #include <linux/fs.h>
-#include <linux/ext2_fs.h>
-#include "volume_id/volume_id_internal.h"
+#include "bb_e2fs_defs.h"
 
-#define	ENABLE_FEATURE_MKFS_EXT2_RESERVED_GDT 0
-#define	ENABLE_FEATURE_MKFS_EXT2_DIR_INDEX    1
-
-// from e2fsprogs
-#define s_reserved_gdt_blocks s_padding1
-#define s_mkfs_time           s_reserved[0]
-#define s_flags               s_reserved[22]
+#define ENABLE_FEATURE_MKFS_EXT2_RESERVED_GDT 0
+#define ENABLE_FEATURE_MKFS_EXT2_DIR_INDEX    1
 
 #define EXT2_HASH_HALF_MD4       1
 #define EXT2_FLAGS_SIGNED_HASH   0x0001
@@ -29,9 +82,9 @@ char BUG_wrong_field_size(void);
 #define STORE_LE(field, value) \
 do { \
 	if (sizeof(field) == 4) \
-		field = cpu_to_le32(value); \
+		field = SWAP_LE32(value); \
 	else if (sizeof(field) == 2) \
-		field = cpu_to_le16(value); \
+		field = SWAP_LE16(value); \
 	else if (sizeof(field) == 1) \
 		field = (value); \
 	else \
@@ -39,7 +92,7 @@ do { \
 } while (0)
 
 #define FETCH_LE32(field) \
-	(sizeof(field) == 4 ? cpu_to_le32(field) : BUG_wrong_field_size())
+	(sizeof(field) == 4 ? SWAP_LE32(field) : BUG_wrong_field_size())
 
 // All fields are little-endian
 struct ext2_dir {
@@ -83,7 +136,7 @@ static void allocate(uint8_t *bitmap, uint32_t blocksize, uint32_t start, uint32
 {
 	uint32_t i;
 
-//bb_info_msg("ALLOC: [%u][%u][%u]: [%u-%u]:=[%x],[%x]", blocksize, start, end, start/8, blocksize - end/8 - 1, (1 << (start & 7)) - 1, (uint8_t)(0xFF00 >> (end & 7)));
+//bb_error_msg("ALLOC: [%u][%u][%u]: [%u-%u]:=[%x],[%x]", blocksize, start, end, start/8, blocksize - end/8 - 1, (1 << (start & 7)) - 1, (uint8_t)(0xFF00 >> (end & 7)));
 	memset(bitmap, 0, blocksize);
 	i = start / 8;
 	memset(bitmap, 0xFF, i);
@@ -118,7 +171,7 @@ static uint32_t has_super(uint32_t x)
 
 static void PUT(uint64_t off, void *buf, uint32_t size)
 {
-//	bb_info_msg("PUT[%llu]:[%u]", off, size);
+	//bb_error_msg("PUT[%llu]:[%u]", off, size);
 	xlseek(fd, off, SEEK_SET);
 	xwrite(fd, buf, size);
 }
@@ -141,7 +194,7 @@ static void PUT(uint64_t off, void *buf, uint32_t size)
 // only for directories, which never need i_size_high).
 //
 // Standard mke2fs creates a filesystem with 256-byte inodes if it is
-// bigger than 0.5GB. So far, we do not do this.
+// bigger than 0.5GB.
 
 // Standard mke2fs 1.41.9:
 // Usage: mke2fs [-c|-l filename] [-b block-size] [-f fragment-size]
@@ -211,38 +264,28 @@ int mkfs_ext2_main(int argc UNUSED_PARAM, char **argv)
 
 	// using global "option_mask32" instead of local "opts":
 	// we are register starved here
-	opt_complementary = "-1:b+:m+:i+";
-	/*opts =*/ getopt32(argv, "cl:b:f:i:I:J:G:N:m:o:g:L:M:O:r:E:T:U:jnqvFS",
-		NULL, &bs, NULL, &bpi, &user_inodesize, NULL, NULL, NULL,
-		&reserved_percent, NULL, NULL, &label, NULL, NULL, NULL, NULL, NULL, NULL);
+	/*opts =*/ getopt32(argv, "cl:b:+f:i:+I:+J:G:N:m:+o:g:L:M:O:r:E:T:U:jnqvFS",
+		/*lbfi:*/ NULL, &bs, NULL, &bpi,
+		/*IJGN:*/ &user_inodesize, NULL, NULL, NULL,
+		/*mogL:*/ &reserved_percent, NULL, NULL, &label,
+		/*MOrE:*/ NULL, NULL, NULL, NULL,
+		/*TU:*/ NULL, NULL);
 	argv += optind; // argv[0] -- device
 
-	// check the device is a block device
+	// open the device, check the device is a block device
 	xmove_fd(xopen(argv[0], O_WRONLY), fd);
-	fstat(fd, &st);
+	xfstat(fd, &st, argv[0]);
 	if (!S_ISBLK(st.st_mode) && !(option_mask32 & OPT_F))
-		bb_error_msg_and_die("not a block device");
+		bb_error_msg_and_die("%s: not a block device", argv[0]);
 
 	// check if it is mounted
 	// N.B. what if we format a file? find_mount_point will return false negative since
-	// it is loop block device which mounted!
+	// it is loop block device which is mounted!
 	if (find_mount_point(argv[0], 0))
 		bb_error_msg_and_die("can't format mounted filesystem");
 
-	// open the device, get size in kbytes
-	if (argv[1]) {
-		kilobytes = xatoull(argv[1]);
-		// seek past end fails on block devices but works on files
-		if (lseek(fd, kilobytes * 1024 - 1, SEEK_SET) != (off_t)-1) {
-			if (!(option_mask32 & OPT_n))
-				xwrite(fd, "", 1); // file grows if needed
-		}
-		//else {
-		//	bb_error_msg("warning, block device is smaller");
-		//}
-	} else {
-		kilobytes = (uoff_t)xlseek(fd, 0, SEEK_END) / 1024;
-	}
+	// get size in kbytes
+	kilobytes = get_volume_size_in_bytes(fd, argv[1], 1024, /*extend:*/ !(option_mask32 & OPT_n)) / 1024;
 
 	bytes_per_inode = 16384;
 	if (kilobytes < 512*1024)
@@ -388,7 +431,7 @@ int mkfs_ext2_main(int argc UNUSED_PARAM, char **argv)
 		// (a bit after 8M image size), but it works for two->three groups
 		// transition (at 16M).
 		if (remainder && (remainder < overhead + 50)) {
-//bb_info_msg("CHOP[%u]", remainder);
+//bb_error_msg("CHOP[%u]", remainder);
 			nblocks -= remainder;
 			goto retry;
 		}
@@ -453,8 +496,10 @@ int mkfs_ext2_main(int argc UNUSED_PARAM, char **argv)
 	STORE_LE(sb->s_magic, EXT2_SUPER_MAGIC);
 	STORE_LE(sb->s_inode_size, inodesize);
 	// set "Required extra isize" and "Desired extra isize" fields to 28
-	if (inodesize != sizeof(*inode))
-		STORE_LE(sb->s_reserved[21], 0x001C001C);
+	if (inodesize != sizeof(*inode)) {
+		STORE_LE(sb->s_min_extra_isize, 0x001c);
+		STORE_LE(sb->s_want_extra_isize, 0x001c);
+	}
 	STORE_LE(sb->s_first_ino, EXT2_GOOD_OLD_FIRST_INO);
 	STORE_LE(sb->s_log_block_size, blocksize_log2 - EXT2_MIN_BLOCK_LOG_SIZE);
 	STORE_LE(sb->s_log_frag_size, blocksize_log2 - EXT2_MIN_BLOCK_LOG_SIZE);
@@ -542,7 +587,7 @@ int mkfs_ext2_main(int argc UNUSED_PARAM, char **argv)
 		free_blocks = (n < blocks_per_group ? n : blocks_per_group) - overhead;
 
 		// mark preallocated blocks as allocated
-//bb_info_msg("ALLOC: [%u][%u][%u]", blocksize, overhead, blocks_per_group - (free_blocks + overhead));
+//bb_error_msg("ALLOC: [%u][%u][%u]", blocksize, overhead, blocks_per_group - (free_blocks + overhead));
 		allocate(buf, blocksize,
 			// reserve "overhead" blocks
 			overhead,
@@ -586,7 +631,11 @@ int mkfs_ext2_main(int argc UNUSED_PARAM, char **argv)
 
 	// zero boot sectors
 	memset(buf, 0, blocksize);
-	PUT(0, buf, 1024); // N.B. 1024 <= blocksize, so buf[0..1023] contains zeros
+	// Disabled: standard mke2fs doesn't do this, and
+	// on SPARC this destroys Sun disklabel.
+	// Users who need/want zeroing can easily do it with dd.
+	//PUT(0, buf, 1024); // N.B. 1024 <= blocksize, so buf[0..1023] contains zeros
+
 	// zero inode tables
 	for (i = 0; i < ngroups; ++i)
 		for (n = 0; n < inode_table_blocks; ++n)
@@ -617,7 +666,7 @@ int mkfs_ext2_main(int argc UNUSED_PARAM, char **argv)
 	n = FETCH_LE32(inode->i_block[0]) + 1;
 	for (i = 0; i < lost_and_found_blocks; ++i)
 		STORE_LE(inode->i_block[i], i + n); // use next block
-//bb_info_msg("LAST BLOCK USED[%u]", i + n);
+//bb_error_msg("LAST BLOCK USED[%u]", i + n);
 	PUT(((uint64_t)FETCH_LE32(gd[0].bg_inode_table) * blocksize) + (EXT2_GOOD_OLD_FIRST_INO-1) * inodesize,
 				buf, inodesize);
 

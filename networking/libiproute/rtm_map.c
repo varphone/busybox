@@ -1,21 +1,18 @@
 /* vi: set sw=4 ts=4: */
 /*
- * rtm_map.c
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version
+ * 2 of the License, or (at your option) any later version.
  *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
- *
- * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
- *
+ * Authors: Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
  */
 
 #include "libbb.h"
 #include "rt_names.h"
 #include "utils.h"
 
-const char* FAST_FUNC rtnl_rtntype_n2a(int id, char *buf)
+const char* FAST_FUNC rtnl_rtntype_n2a(int id)
 {
 	switch (id) {
 	case RTN_UNSPEC:
@@ -43,9 +40,7 @@ const char* FAST_FUNC rtnl_rtntype_n2a(int id, char *buf)
 	case RTN_XRESOLVE:
 		return "xresolve";
 	default:
-		/* buf is SPRINT_BSIZE big */
-		sprintf(buf, "%d", id);
-		return buf;
+		return itoa(id);
 	}
 }
 

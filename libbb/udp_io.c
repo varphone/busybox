@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2007 Denys Vlasenko
  *
- * Licensed under GPL version 2, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2, see file LICENSE in this source tree.
  */
 #include "libbb.h"
 
@@ -13,13 +13,13 @@
  * We don't check for errors here. Not supported == won't be used
  */
 void FAST_FUNC
-socket_want_pktinfo(int fd)
+socket_want_pktinfo(int fd UNUSED_PARAM)
 {
 #ifdef IP_PKTINFO
-	setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &const_int_1, sizeof(int));
+	setsockopt_1(fd, IPPROTO_IP, IP_PKTINFO);
 #endif
 #if ENABLE_FEATURE_IPV6 && defined(IPV6_PKTINFO)
-	setsockopt(fd, IPPROTO_IPV6, IPV6_PKTINFO, &const_int_1, sizeof(int));
+	setsockopt_1(fd, IPPROTO_IPV6, IPV6_PKTINFO);
 #endif
 }
 
@@ -70,7 +70,13 @@ send_to_from(int fd, void *buf, size_t len, int flags,
 	msg.msg_flags = flags;
 
 	cmsgptr = CMSG_FIRSTHDR(&msg);
-	if (to->sa_family == AF_INET && from->sa_family == AF_INET) {
+	/*
+	 * Users report that to->sa_family can be AF_INET6 too,
+	 * if "to" was acquired by recv_from_to(). IOW: recv_from_to()
+	 * was seen showing IPv6 "from" even when the destination
+	 * of received packet (our local address) was IPv4.
+	 */
+	if (/* to->sa_family == AF_INET && */ from->sa_family == AF_INET) {
 		struct in_pktinfo *pktptr;
 		cmsgptr->cmsg_level = IPPROTO_IP;
 		cmsgptr->cmsg_type = IP_PKTINFO;
@@ -86,7 +92,7 @@ send_to_from(int fd, void *buf, size_t len, int flags,
 		pktptr->ipi_spec_dst = ((struct sockaddr_in*)from)->sin_addr;
 	}
 # if ENABLE_FEATURE_IPV6 && defined(IPV6_PKTINFO)
-	else if (to->sa_family == AF_INET6 && from->sa_family == AF_INET6) {
+	else if (/* to->sa_family == AF_INET6 && */ from->sa_family == AF_INET6) {
 		struct in6_pktinfo *pktptr;
 		cmsgptr->cmsg_level = IPPROTO_IPV6;
 		cmsgptr->cmsg_type = IPV6_PKTINFO;
@@ -152,24 +158,24 @@ recv_from_to(int fd, void *buf, size_t len, int flags,
 		if (cmsgptr->cmsg_level == IPPROTO_IP
 		 && cmsgptr->cmsg_type == IP_PKTINFO
 		) {
-# define pktinfo(cmsgptr) ( (struct in_pktinfo*)(CMSG_DATA(cmsgptr)) )
+			const int IPI_ADDR_OFF = offsetof(struct in_pktinfo, ipi_addr);
 			to->sa_family = AF_INET;
+			/*# define pktinfo(cmsgptr) ( (struct in_pktinfo*)(CMSG_DATA(cmsgptr)) )*/
 			/*to4->sin_addr = pktinfo(cmsgptr)->ipi_addr; - may be unaligned */
-			memcpy(&to4->sin_addr, &pktinfo(cmsgptr)->ipi_addr, sizeof(to4->sin_addr));
+			memcpy(&to4->sin_addr, (char*)(CMSG_DATA(cmsgptr)) + IPI_ADDR_OFF, sizeof(to4->sin_addr));
 			/*to4->sin_port = 123; - this data is not supplied by kernel */
-# undef pktinfo
 			break;
 		}
 # if ENABLE_FEATURE_IPV6 && defined(IPV6_PKTINFO)
 		if (cmsgptr->cmsg_level == IPPROTO_IPV6
 		 && cmsgptr->cmsg_type == IPV6_PKTINFO
 		) {
-#  define pktinfo(cmsgptr) ( (struct in6_pktinfo*)(CMSG_DATA(cmsgptr)) )
+			const int IPI6_ADDR_OFF = offsetof(struct in6_pktinfo, ipi6_addr);
 			to->sa_family = AF_INET6;
+			/*#  define pktinfo(cmsgptr) ( (struct in6_pktinfo*)(CMSG_DATA(cmsgptr)) )*/
 			/*to6->sin6_addr = pktinfo(cmsgptr)->ipi6_addr; - may be unaligned */
-			memcpy(&to6->sin6_addr, &pktinfo(cmsgptr)->ipi6_addr, sizeof(to6->sin6_addr));
+			memcpy(&to6->sin6_addr, (char*)(CMSG_DATA(cmsgptr)) + IPI6_ADDR_OFF, sizeof(to6->sin6_addr));
 			/*to6->sin6_port = 123; */
-#  undef pktinfo
 			break;
 		}
 # endif

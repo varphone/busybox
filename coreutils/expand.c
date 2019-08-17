@@ -3,7 +3,7 @@
  *
  * Copyright (C) 89, 91, 1995-2006 Free Software Foundation, Inc.
  *
- * Licensed under GPLv2 or later, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
  *
  * David MacKenzie <djm@gnu.ai.mit.edu>
  *
@@ -20,6 +20,66 @@
  *
  *  Caveat: this versions of expand and unexpand don't accept tab lists.
  */
+//config:config EXPAND
+//config:	bool "expand"
+//config:	default y
+//config:	help
+//config:	  By default, convert all tabs to spaces.
+//config:
+//config:config FEATURE_EXPAND_LONG_OPTIONS
+//config:	bool "Enable long options"
+//config:	default y
+//config:	depends on EXPAND && LONG_OPTS
+//config:	help
+//config:	  Support long options for the expand applet.
+//config:
+//config:config UNEXPAND
+//config:	bool "unexpand"
+//config:	default y
+//config:	help
+//config:	  By default, convert only leading sequences of blanks to tabs.
+//config:
+//config:config FEATURE_UNEXPAND_LONG_OPTIONS
+//config:	bool "Enable long options"
+//config:	default y
+//config:	depends on UNEXPAND && LONG_OPTS
+//config:	help
+//config:	  Support long options for the unexpand applet.
+
+//applet:IF_EXPAND(APPLET(expand, BB_DIR_USR_BIN, BB_SUID_DROP))
+//applet:IF_UNEXPAND(APPLET_ODDNAME(unexpand, expand, BB_DIR_USR_BIN, BB_SUID_DROP, unexpand))
+
+//kbuild:lib-$(CONFIG_EXPAND) += expand.o
+//kbuild:lib-$(CONFIG_UNEXPAND) += expand.o
+
+//usage:#define expand_trivial_usage
+//usage:       "[-i] [-t N] [FILE]..."
+//usage:#define expand_full_usage "\n\n"
+//usage:       "Convert tabs to spaces, writing to stdout\n"
+//usage:	IF_FEATURE_EXPAND_LONG_OPTIONS(
+//usage:     "\n	-i,--initial	Don't convert tabs after non blanks"
+//usage:     "\n	-t,--tabs=N	Tabstops every N chars"
+//usage:	)
+//usage:	IF_NOT_FEATURE_EXPAND_LONG_OPTIONS(
+//usage:     "\n	-i	Don't convert tabs after non blanks"
+//usage:     "\n	-t	Tabstops every N chars"
+//usage:	)
+
+//usage:#define unexpand_trivial_usage
+//usage:       "[-fa][-t N] [FILE]..."
+//usage:#define unexpand_full_usage "\n\n"
+//usage:       "Convert spaces to tabs, writing to stdout\n"
+//usage:	IF_FEATURE_UNEXPAND_LONG_OPTIONS(
+//usage:     "\n	-a,--all	Convert all blanks"
+//usage:     "\n	-f,--first-only	Convert only leading blanks"
+//usage:     "\n	-t,--tabs=N	Tabstops every N chars"
+//usage:	)
+//usage:	IF_NOT_FEATURE_UNEXPAND_LONG_OPTIONS(
+//usage:     "\n	-a	Convert all blanks"
+//usage:     "\n	-f	Convert only leading blanks"
+//usage:     "\n	-t N	Tabstops every N chars"
+//usage:	)
+
 #include "libbb.h"
 #include "unicode.h"
 
@@ -48,8 +108,8 @@ static void expand(FILE *file, unsigned tab_size, unsigned opt)
 			if (c == '\t') {
 				unsigned len;
 				*ptr = '\0';
-# if ENABLE_FEATURE_ASSUME_UNICODE
-				len = unicode_strlen(ptr_strbeg);
+# if ENABLE_UNICODE_SUPPORT
+				len = unicode_strwidth(ptr_strbeg);
 # else
 				len = ptr - ptr_strbeg;
 # endif
@@ -77,12 +137,13 @@ static void unexpand(FILE *file, unsigned tab_size, unsigned opt)
 
 		while (*ptr) {
 			unsigned n;
-			unsigned len;
+			unsigned len = 0;
 
 			while (*ptr == ' ') {
-				column++;
 				ptr++;
+				len++;
 			}
+			column += len;
 			if (*ptr == '\t') {
 				column += tab_size - (column % tab_size);
 				ptr++;
@@ -90,22 +151,23 @@ static void unexpand(FILE *file, unsigned tab_size, unsigned opt)
 			}
 
 			n = column / tab_size;
-			column = column % tab_size;
-			while (n--)
-				putchar('\t');
+			if (n) {
+				len = column = column % tab_size;
+				while (n--)
+					putchar('\t');
+			}
 
 			if ((opt & OPT_INITIAL) && ptr != line) {
-				printf("%*s%s", column, "", ptr);
+				printf("%*s%s", len, "", ptr);
 				break;
 			}
 			n = strcspn(ptr, "\t ");
-			printf("%*s%.*s", column, "", n, ptr);
-# if ENABLE_FEATURE_ASSUME_UNICODE
+			printf("%*s%.*s", len, "", n, ptr);
+# if ENABLE_UNICODE_SUPPORT
 			{
-				char c;
-				c = ptr[n];
+				char c = ptr[n];
 				ptr[n] = '\0';
-				len = unicode_strlen(ptr);
+				len = unicode_strwidth(ptr);
 				ptr[n] = c;
 			}
 # else

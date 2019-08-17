@@ -4,19 +4,37 @@
  *
  * Busybox'ed (2009) by Vladimir Dronnikov <dronnikov@gmail.com>
  *
- * Licensed under GPLv2, see file LICENSE in this tarball for details.
+ * Licensed under GPLv2, see file LICENSE in this source tree.
  */
+//config:config MKFS_REISER
+//config:	bool "mkfs_reiser"
+//config:	default n
+//config:	select PLATFORM_LINUX
+//config:	help
+//config:	  Utility to create ReiserFS filesystems.
+//config:	  Note: this applet needs a lot of testing and polishing.
+
+//applet:IF_MKFS_REISER(APPLET_ODDNAME(mkfs.reiser, mkfs_reiser, BB_DIR_SBIN, BB_SUID_DROP, mkfs_reiser))
+
+//kbuild:lib-$(CONFIG_MKFS_REISER) += mkfs_reiser.o
+
+//usage:#define mkfs_reiser_trivial_usage
+//usage:       "[-f] [-l LABEL] BLOCKDEV [4K-BLOCKS]"
+//usage:#define mkfs_reiser_full_usage "\n\n"
+//usage:       "Make a ReiserFS V3 filesystem\n"
+//usage:     "\n	-f	Force"
+//usage:     "\n	-l LBL	Volume label"
+
 #include "libbb.h"
 #include <linux/fs.h>
-#include "volume_id/volume_id_internal.h"
 
 char BUG_wrong_field_size(void);
 #define STORE_LE(field, value) \
 do { \
 	if (sizeof(field) == 4) \
-		field = cpu_to_le32(value); \
+		field = SWAP_LE32(value); \
 	else if (sizeof(field) == 2) \
-		field = cpu_to_le16(value); \
+		field = SWAP_LE16(value); \
 	else if (sizeof(field) == 1) \
 		field = (value); \
 	else \
@@ -24,7 +42,7 @@ do { \
 } while (0)
 
 #define FETCH_LE32(field) \
-	(sizeof(field) == 4 ? cpu_to_le32(field) : BUG_wrong_field_size())
+	(sizeof(field) == 4 ? SWAP_LE32(field) : BUG_wrong_field_size())
 
 struct journal_params {
 	uint32_t jp_journal_1st_block;      /* where does journal start from on its device */
@@ -59,7 +77,7 @@ struct reiserfs_super_block {
 
 	char s_magic[10];               /* 52 "ReIsErFs" or "ReIsEr2Fs" or "ReIsEr3Fs" */
 	uint16_t sb_fs_state;           /* 62 it is set to used by fsck to mark which phase of rebuilding is done (used for fsck debugging) */
-	uint32_t sb_hash_function_code; /* 64 code of fuction which was/is/will be used to sort names in a directory. See codes in above */
+	uint32_t sb_hash_function_code; /* 64 code of function which was/is/will be used to sort names in a directory. See codes in above */
 	uint16_t sb_tree_height;        /* 68 height of filesytem tree. Tree consisting of only one root block has 2 here */
 	uint16_t sb_bmap_nr;            /* 70 amount of bitmap blocks needed to address each block of file system */
 	uint16_t sb_version;            /* 72 this field is only reliable on filesystem with non-standard journal */
@@ -162,36 +180,25 @@ int mkfs_reiser_main(int argc UNUSED_PARAM, char **argv)
 
 	// using global "option_mask32" instead of local "opts":
 	// we are register starved here
-	opt_complementary = "-1:b+";
-	/*opts =*/ getopt32(argv, "b:j:s:o:t:B:h:u:l:fqd",
+	opt_complementary = "-1";
+	/*opts =*/ getopt32(argv, "b:+j:s:o:t:B:h:u:l:fqd",
 		NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &label);
 	argv += optind; // argv[0] -- device
 
 	// check the device is a block device
 	fd = xopen(argv[0], O_WRONLY | O_EXCL);
-	fstat(fd, &st);
+	xfstat(fd, &st, argv[0]);
 	if (!S_ISBLK(st.st_mode) && !(option_mask32 & OPT_f))
-		bb_error_msg_and_die("not a block device");
+		bb_error_msg_and_die("%s: not a block device", argv[0]);
 
 	// check if it is mounted
 	// N.B. what if we format a file? find_mount_point will return false negative since
-	// it is loop block device which mounted!
+	// it is loop block device which is mounted!
 	if (find_mount_point(argv[0], 0))
 		bb_error_msg_and_die("can't format mounted filesystem");
 
 	// open the device, get size in blocks
-	if (argv[1]) {
-		blocks = xatoull(argv[1]);
-		// seek past end fails on block devices but works on files
-		if (lseek(fd, blocks * blocksize - 1, SEEK_SET) != (off_t)-1) {
-			xwrite(fd, "", 1); // file grows if needed
-		}
-		//else {
-		//	bb_error_msg("warning, block device is smaller");
-		//}
-	} else {
-		blocks = (uoff_t)xlseek(fd, 0, SEEK_END) / blocksize;
-	}
+	blocks = get_volume_size_in_bytes(fd, argv[1], blocksize, /*extend:*/ 1) / blocksize;
 
 	// block number sanity check
 	// we have a limit: skipped area, super block, journal and root block
@@ -228,8 +235,8 @@ int mkfs_reiser_main(int argc UNUSED_PARAM, char **argv)
 	jp = &sb->sb_journal;
 	STORE_LE(jp->jp_journal_1st_block, REISERFS_DISK_OFFSET_IN_BYTES / blocksize + 1/*sb*/ + 1/*bmp#0*/);
 	timestamp = time(NULL);
-	srandom(timestamp);
-	STORE_LE(jp->jp_journal_magic, random());
+	srand(timestamp);
+	STORE_LE(jp->jp_journal_magic, rand());
 	STORE_LE(jp->jp_journal_size, journal_blocks);
 	STORE_LE(jp->jp_journal_trans_max, JOURNAL_TRANS_MAX);
 	STORE_LE(jp->jp_journal_max_batch, JOURNAL_MAX_BATCH);

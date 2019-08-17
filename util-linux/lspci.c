@@ -1,12 +1,34 @@
 /* vi: set sw=4 ts=4: */
 /*
-* lspci implementation for busybox
-*
-* Copyright (C) 2009  Malek Degachi <malek-degachi@laposte.net>
-*
-* Licensed under the GPL v2 or later, see the file LICENSE in this tarball.
-*/
-#include <libbb.h>
+ * lspci implementation for busybox
+ *
+ * Copyright (C) 2009  Malek Degachi <malek-degachi@laposte.net>
+ *
+ * Licensed under GPLv2 or later, see file LICENSE in this source tree.
+ */
+//config:config LSPCI
+//config:	bool "lspci"
+//config:	default y
+//config:	#select PLATFORM_LINUX
+//config:	help
+//config:	  lspci is a utility for displaying information about PCI buses in the
+//config:	  system and devices connected to them.
+//config:
+//config:	  This version uses sysfs (/sys/bus/pci/devices) only.
+
+//applet:IF_LSPCI(APPLET(lspci, BB_DIR_USR_BIN, BB_SUID_DROP))
+
+//kbuild:lib-$(CONFIG_LSPCI) += lspci.o
+
+//usage:#define lspci_trivial_usage
+//usage:       "[-mk]"
+//usage:#define lspci_full_usage "\n\n"
+//usage:       "List all PCI devices"
+//usage:     "\n"
+//usage:     "\n	-m	Parsable output"
+//usage:     "\n	-k	Show driver"
+
+#include "libbb.h"
 
 enum {
 	OPT_m = (1 << 0),
@@ -65,11 +87,11 @@ static int FAST_FUNC fileAction(
 
 	if (option_mask32 & OPT_m) {
 		printf("%s \"Class %04x\" \"%04x\" \"%04x\" \"%04x\" \"%04x\"",
-		       pci_slot_name, pci_class, pci_vid, pci_did,
-		       pci_subsys_vid, pci_subsys_did);
+			pci_slot_name, pci_class, pci_vid, pci_did,
+			pci_subsys_vid, pci_subsys_did);
 	} else {
 		printf("%s Class %04x: %04x:%04x",
-		       pci_slot_name, pci_class, pci_vid, pci_did);
+			pci_slot_name, pci_class, pci_vid, pci_did);
 	}
 
 	if ((option_mask32 & OPT_k) && driver) {

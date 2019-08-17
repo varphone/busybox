@@ -7,10 +7,30 @@
    Modified for busybox based on coreutils v 5.0
    Copyright (C) 2003 Glenn McGrath
 
-   Licensed under the GPL v2 or later, see the file LICENSE in this tarball.
+   Licensed under GPLv2 or later, see file LICENSE in this source tree.
 */
+//config:config FOLD
+//config:	bool "fold"
+//config:	default y
+//config:	help
+//config:	  Wrap text to fit a specific width.
+
+//applet:IF_FOLD(APPLET_NOEXEC(fold, fold, BB_DIR_USR_BIN, BB_SUID_DROP, fold))
+
+//kbuild:lib-$(CONFIG_FOLD) += fold.o
+
+//usage:#define fold_trivial_usage
+//usage:       "[-bs] [-w WIDTH] [FILE]..."
+//usage:#define fold_full_usage "\n\n"
+//usage:       "Wrap input lines in each FILE (or stdin), writing to stdout\n"
+//usage:     "\n	-b	Count bytes rather than columns"
+//usage:     "\n	-s	Break at spaces"
+//usage:     "\n	-w	Use WIDTH columns instead of 80"
+
 #include "libbb.h"
 #include "unicode.h"
+
+/* This is a NOEXEC applet. Be very careful! */
 
 /* Must match getopt32 call */
 #define FLAG_COUNT_BYTES        1
