@@ -117,6 +117,8 @@ int df_main(int argc UNUSED_PARAM, char **argv)
 
 	init_unicode();
 
+	memset(&s, 0, sizeof(s));
+
 #if ENABLE_FEATURE_HUMAN_READABLE && ENABLE_FEATURE_DF_FANCY
 	opt_complementary = "k-mB:m-Bk:B-km";
 #elif ENABLE_FEATURE_HUMAN_READABLE
